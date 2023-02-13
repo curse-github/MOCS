@@ -1,0 +1,5 @@
+/node_modules
+/.vscode
+/Spotify
+yarn-error.log
+tsconfig.json

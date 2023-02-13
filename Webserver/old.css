@@ -1,0 +1,23 @@
+body {
+  background-color: rgb(28, 30, 31);
+  color: #ffffff;
+}
+button, input {
+  border-style:outset;
+  border-color: rgb(107, 107, 107);
+  background-color: rgb(36, 37, 38);
+  color: #ffffff;
+}
+button:hover {
+  border-style:outset;
+  background-color: #18191a;
+  transition: background-color 275ms ease-in;
+}
+input:hover {
+  background-color: #232324;
+}
+input:focus {
+  background-color: #1d1e20;
+  border-style:outset;
+  outline-style: inset;
+}

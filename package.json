@@ -1,0 +1,15 @@
+{
+  "name": "mocs2",
+  "version": "2.0",
+  "description": "modular online control system v2",
+  "main": "Server.js",
+  "scripts": {
+    "start": "ts-node Server.ts"
+  },
+  "author": "Curse",
+  "license": "ISC",
+  "dependencies": {
+    "typescript": "^4.9.3",
+    "nodejs": "^14.15.3"
+  }
+}

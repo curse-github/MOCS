@@ -1,0 +1,55 @@
+
+<button onclick='l1 = [].slice.call(document.getElementsByClassName("collapseButton")); l2 = [].slice.call(document.getElementsByClassName("collapse")); for (var i = 0; i < l1.length; i++){ l2[i].hidden=true; l1[i].innerText = "&gt;"}'>collapse all</button><p></p>
+<p style="margin-left: 0px;padding-top:0;margin-bottom:0;margin-top:0;">self <button class="collapseButton" id="thing" onclick='document.getElementById("self").hidden=!document.getElementById("self").hidden; this.innerText = document.getElementById("self").hidden ? "&gt;" : "&lt;";'>&#60;</button></p>
+<lib id="self" class="collapse">
+     <lib class="tab-contents" style="padding-left: 20px;padding-top:0;margin-bottom:0;margin-top:0;">Spotify <button class="collapseButton" onclick='document.getElementById("Spotify").hidden=!document.getElementById("Spotify").hidden; this.innerText = document.getElementById("Spotify").hidden ? "&gt;" : "&lt;";'>&lt;</button></lib>
+     <lib id="Spotify" class="collapse">
+          <p style="margin-left: 40px;padding-top:0;margin-bottom:0;margin-top:0;">
+               <button onclick="">self.Spotify.Toggle()</button>
+               <input type="text" value="Test" id="self.Spotify.Toggle.device">
+          </p>
+          <p style="margin-left: 40px;padding-top:0;margin-bottom:0;margin-top:0;">
+               <button onclick="">self.Spotify.Play()</button>
+               <input type="text" value="" id="self.Spotify.Play.link">
+               <input type="text" value="Test" id="self.Spotify.Play.device">
+          </p>
+          <p style="margin-left: 40px;padding-top:0;margin-bottom:0;margin-top:0;">
+               <button onclick="">self.Spotify.Pause()</button>
+               <input type="text" value="Test" id="self.Spotify.Pause.device">
+          </p>
+          <p style="margin-left: 40px;padding-top:0;margin-bottom:0;margin-top:0;">
+               <button onclick="">self.Spotify.SkipNext()</button>
+               <input type="text" value="Test" id="self.Spotify.SkipNext.device">
+          </p>
+          <p style="margin-left: 40px;padding-top:0;margin-bottom:0;margin-top:0;">
+               <button onclick="">self.Spotify.SkipPrevious()</button>
+               <input type="text" value="Test" id="self.Spotify.SkipPrevious.device">
+          </p>
+          <p style="margin-left: 40px;padding-top:0;margin-bottom:0;margin-top:0;">
+               <button onclick="">self.Spotify.Authenticate()</button>
+          </p>
+     </lib>
+</lib>
+<p style="margin-left: 00px;padding-top:0;margin-bottom:0;margin-top:0;">NanoPi <button class="collapseButton" onclick='document.getElementById("NanoPi").hidden=!document.getElementById("NanoPi").hidden; this.innerText = document.getElementById("NanoPi").hidden ? "&gt;" : "&lt;";'>&#60;</button></p>
+<lib id="NanoPi" class="collapse">
+     <p style="margin-left: 20px;padding-top:0;margin-bottom:0;margin-top:0;">
+          <button onclick="">nanopi.line()</button>
+          <input type="text" value="1" id="nanopi.line.lineNum">
+          <input type="text" value="string" id="nanopi.line.text">
+     </p>
+     <p style="margin-left: 20px;padding-top:0;margin-bottom:0;margin-top:0;">
+          <button onclick="">nanopi.clear()</button>
+     </p>
+     <p style="margin-left: 20px;padding-top:0;margin-bottom:0;margin-top:0;">
+          <button onclick="">nanopi.restore()</button>
+          <input type="text" value="--__--__--__--__" id="nanopi.restore.line1">
+          <input type="text" value="--__--__--__--__" id="nanopi.restore.line2">
+          <input type="text" value="--__--__--__--__" id="nanopi.restore.line3">
+          <input type="text" value="--__--__--__--__" id="nanopi.restore.line4">
+          <input type="text" value="--__--__--__--__" id="nanopi.restore.line5">
+     </p>
+     <p style="margin-left: 20px;padding-top:0;margin-bottom:0;margin-top:0;">
+          <button onclick="">nanopi.wasPressed()</button>
+          <input type="text" value="1" id="nanopi.wasPressed.button">
+     </p>
+</lib>

@@ -1,0 +1,77 @@
+
+.w-33 {
+	width:33.33%
+}
+.div-collapsable {
+	display:flex;
+	flex-wrap: nowrap;
+	flex-direction: column;
+	transform-origin:top;
+	overflow:hidden;
+	box-sizing: border-box;
+	--maxHeight:400px
+}
+@-webkit-keyframes collapse {
+	0% {max-height:var(--maxHeight); opacity: 100%;}
+	100% {max-height:0px; opacity: 0%;}
+}
+@keyframes collapse {
+	0% {max-height:var(--maxHeight); opacity: 100%;}
+	100% {max-height:0px; opacity: 0%;}
+}
+[collapsed="true"] {
+	max-height:0px;
+
+    animation-name:collapse;
+    -webkit-animation-name:collapse;
+	animation-duration: 250ms;
+	-webkit-animation-duration: 250ms;
+	animation-fill-mode: forwards;
+	-webkit-animation-fill-mode: forwards;
+}
+@-webkit-keyframes unCollapse {
+	0% {max-height:0px; opacity: 0%;}
+	100% {max-height:var(--maxHeight); opacity: 100%;}
+}
+@keyframes unCollapse {
+	0% {max-height:0px; opacity: 0%;}
+	100% {max-height:var(--maxHeight); opacity: 100%;}
+}
+[collapsed="false"] {
+	max-height:var(--maxHeight);
+	
+    animation-name:unCollapse;
+    -webkit-animation-name:unCollapse;
+	animation-duration: 250ms;
+	-webkit-animation-duration: 250ms;
+	animation-fill-mode: forwards;
+	-webkit-animation-fill-mode: forwards;
+}
+[deleted=false] {
+	opacity: 100%;
+	transition: opacity 250ms ease-in
+}
+[deleted=true] {
+	opacity: 0%;
+	transition: opacity 250ms ease-in
+}
+
+
+.btn {
+	background-color: #252627 !important;
+}
+.form-control-input {
+	background-color: #252627 !important;
+}
+body {
+	background-color: #252627 !important;
+}
+
+.btn:hover {
+	background-color: #202122 !important;
+	transition: background-color 100ms ease !important;
+}
+.form-control-input:hover {
+	background-color: #202122 !important;
+	transition: background-color 100ms ease !important;
+}

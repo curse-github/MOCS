@@ -1,0 +1,2 @@
+Only things needed are a ./Spotify/ folder, which contains a ClientID.txt, ClientSecret.txt, and Redirect.txt used for the spotify api
+Modular online control system. A server which will runs can be connected to by any kind of device. A device which has gives the server access to do something can be controlled in real-time through websocket or through the web server running on the main server. The web server can pass in values and call functions through the server to the device.
