@@ -3,11 +3,11 @@ const fs = require("fs");
 import {httpsRequestPromise} from "./Lib";
 
 const SpotifyClientID = fs.readFileSync("Spotify/ClientID.txt", 'utf8');
-const SpotifyClientSecret = fs.readFileSync("Spotify/AccessToken.txt", 'utf8');
+const SpotifyClientSecret = fs.readFileSync("Spotify/ClientSecret.txt", 'utf8');
 const redirectLink = fs.readFileSync("Spotify/Redirect.txt", 'utf8');
-const Link = "https://accounts.spotify.com/authorize?client_id=" + SpotifyClientID + "&response_type=code&redirect_uri=" + redirectLink + "/SetSpotifyToken&scope=user-modify-playback-state user-read-playback-position user-read-currently-playing user-read-recently-played user-read-playback-state";
+const Link = "https://accounts.spotify.com/authorize?client_id=" + SpotifyClientID + "&response_type=code&redirect_uri=" + redirectLink + "&scope=user-modify-playback-state user-read-playback-position user-read-currently-playing user-read-recently-played user-read-playback-state";
 function GetSpotifyToken(code:string) {
-    httpsRequestPromise("api.spotify.com","/api/token","POST",{"Content-Type":"application/x-www-form-urlencoded","Accept":"application/json"},"grant_type=authorization_code&code=" + code + "&redirect_uri=" + redirectLink + "/SetSpotifyToken&client_id=" + SpotifyClientID + "&client_secret=" + SpotifyClientSecret)
+    httpsRequestPromise("api.spotify.com","/api/token","POST",{"Content-Type":"application/x-www-form-urlencoded","Accept":"application/json"},"grant_type=authorization_code&code=" + code + "&redirect_uri=" + redirectLink + "&client_id=" + SpotifyClientID + "&client_secret=" + SpotifyClientSecret)
     .then((curl:string) => {
         try {
             if (JSON.parse(curl)) {
@@ -524,7 +524,7 @@ function SpotifySkipPrevious(device?:string|null, account?:string|null) {
         try { SpotifyAccessTokenPer = fs.readFileSync("Spotify/AccessToken" + (account != null ? account : "") + ".txt", 'utf8');
         } catch (err) { reject(1); console.log("SpotifySkipPreviousFileError1: " + err); return; }
         if (SpotifyAccessTokenPer != null && SpotifyAccessTokenPer != "") {
-            httpsRequestPromise("spotify.com", "/v1/me/player/previous" + ((device == null || device == "") ? "" : "?device_id=" + device),"POST",{"Accept":"application/json","Content-Type":"application/json","Authorization":"Bearer " + SpotifyAccessTokenPer},null)
+            httpsRequestPromise("api.spotify.com", "/v1/me/player/previous" + ((device == null || device == "") ? "" : "?device_id=" + device),"POST",{"Accept":"application/json","Content-Type":"application/json","Authorization":"Bearer " + SpotifyAccessTokenPer},null)
             .then((curl:string) => {
                 try {
                     if (JSON.parse(curl) != null) {

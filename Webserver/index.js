@@ -2,7 +2,9 @@
 var login = "";
 var connected = false;
 var connecting = false;
-const url = "mc.campbellsimpson.com";
+//const url = "mc.campbellsimpson.com";
+const url = "192.168.1.37";
+const tabSize = 20;
 function append(parent,type,content,attributes) {
 	var thing;
 	if (type != null) { thing = document.createElement(type); } else { document.createElement("div"); }
@@ -78,27 +80,27 @@ function setup() {
 				} else if (msg.type == "ping" && msg.data != null) {
 					send("{\"type\":\"pong\",\"data\":\"" + msg.data + "\"}");
 				} else if (msg.type == "redirect") {
-					//var date = new Date();
-					//date.setTime(date.getTime() + (5000));
-					//document.cookie = "login=" + login + "; expires=" + date.toUTCString() + "; path=/"
+					var date = new Date();
+					date.setTime(date.getTime() + (10000));
+					document.cookie = "login=" + login + "; expires=" + date.toUTCString() + "; path=/"
 					window.location.href = msg.data;
-					} else if (msg.type == "command") {
-						cmd = msg.data;
-						if (msg.data.toLowerCase() == "connect()") {
-							processDevice(document.body, msg.parameters[1], msg.parameters[0].toLowerCase(), 0, true);
-							setTimeout(() => {
-								document.getElementById(msg.parameters[1].name.toLowerCase() + "-P").setAttribute("deleted",false);
-							}, 25);
-						} else if (msg.data.toLowerCase() == "disconnect()") {
-							let element = document.getElementById(msg.parameters[0].toLowerCase() + "-P");
-							element.setAttribute("deleted",true);
-							setTimeout(() => {
-								document.body.removeChild(element);
-							}, 300);
-						}
-					} else if (msg.type == "pong") {
-						//console.log("pong");
-					} else {
+				} else if (msg.type == "command") {
+					cmd = msg.data;
+					if (cmd.toLowerCase() == "connect()") {
+						processDevice(document.body, msg.parameters[1], msg.parameters[0].toLowerCase(), 1, true);
+						setTimeout(() => {
+							document.getElementById(msg.parameters[1].name.toLowerCase() + "-P").setAttribute("deleted",false);
+						}, 25);
+					} else if (cmd.toLowerCase() == "disconnect()") {
+						let element = document.getElementById(msg.parameters[0].toLowerCase() + "-P");
+						element.setAttribute("deleted",true);
+						setTimeout(() => {
+							element.parentNode.removeChild(element);
+						}, 300);
+					}
+				} else if (msg.type == "pong") {
+					//console.log("pong");
+				} else {
 					console.log(event.data);
 				}
 			}
@@ -118,7 +120,7 @@ function setup() {
 			var parsedUrl = parseUrl(window.location.search);
 			if (parsedUrl.password != null && parsedUrl.username != null) {
 				login = parsedUrl.username + "/" + parsedUrl.password;
-				send(JSON.stringify({ "type":"command", "data":{ "device":"self", "function":"authenticate", "parameters": [ parsedUrl.username, parsedUrl.password ] }, "id":2 } ));
+				send(JSON.stringify({ "type":"command", "data":{ "device":"self", "function":"authenticate", "parameters": [ parsedUrl.username, parsedUrl.password, true ] }, "id":2 } ));
 				//console.log("sent authentication");
 			} else if (document.cookie != null && document.cookie != "") { callback(); }
 		} else if (document.cookie != null && document.cookie != "") { callback(); }
@@ -134,7 +136,6 @@ function setup() {
 }
 setup();
 
-var tabSize = 20;
 function processDevice(parent,device,deviceName, tabs, startDeleted) {
 	if ((device.functions != null && Object.keys(device.functions).length > 0) || (device.devices != null && Object.keys(device.devices).length > 0)) {
 		var p = append(parent,"p", device.name + "   ", {id:device.name.toLowerCase() + "-P", deleted:(startDeleted == false || startDeleted == null) ? false : true, style:"margin-left: " + (tabSize * tabs) + "px;padding-top:0;margin-bottom:0;margin-top:0;"});
@@ -249,7 +250,8 @@ function loginFunc() {
 			"parameters":
 				[
 					document.getElementById('username').value,
-					document.getElementById('password').value
+					document.getElementById('password').value,
+					true
 				]
 			},
 			"id":2

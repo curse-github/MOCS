@@ -3,7 +3,6 @@
  * 
  * MAIN:
  * 
- * bootstrap login
  * login redo!
  * 
  * SIDE
@@ -119,11 +118,16 @@ ws.on('connection', (websocket:any) => {
                                         handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"nanopi\",\"function\":\"Subscribe\",\"parameters\":[2,\"self.spotify\",\"toggle\",\"\\\"Test\\\"\"]}}");
                                         handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"nanopi\",\"function\":\"Subscribe\",\"parameters\":[3,\"self.spotify\",\"skipnext\",\"\\\"Test\\\"\"]}}");
                                     }
+                                    if (msg.data.name.toLowerCase() == "controller") {
+                                        handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"controller\",\"function\":\"Subscribe\",\"parameters\":[7,\"self.spotify\",\"skipprevious\",\"\\\"Test\\\"\"]}}");
+                                        handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"controller\",\"function\":\"Subscribe\",\"parameters\":[6,\"self.spotify\",\"toggle\",\"\\\"Test\\\"\"]}}");
+                                        handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"controller\",\"function\":\"Subscribe\",\"parameters\":[5,\"self.spotify\",\"skipnext\",\"\\\"Test\\\"\"]}}");
+                                    }
                                     if (connectionSubscriptions[msg.data.name.toLowerCase()] != null && (typeof connectionSubscriptions[msg.data.name.toLowerCase()]) == "object" && Array.isArray(connectionSubscriptions[msg.data.name.toLowerCase()])) {
                                         for(var i:number = 0; i < connectionSubscriptions[msg.data.name.toLowerCase()].length; i++) {
                                             handleCommand(JSON.parse("{\"type\":\"command\",\"data\":{\"device\":\"" + connectionSubscriptions[msg.data.name.toLowerCase()][i][0] + "\",\"function\":\"" + connectionSubscriptions[msg.data.name.toLowerCase()][i][1] + "\",\"parameters\":[\"" + msg.data.name + "\"]}}"));
                                         }
-                                    }
+                                    } 
                                     if (connectionSubscriptions["any"] != null && (typeof connectionSubscriptions["any"]) == "object" && Array.isArray(connectionSubscriptions["any"])) {
                                         for(var i:number = 0; i < connectionSubscriptions["any"].length; i++) {
                                             if (websockets[connectionSubscriptions["any"][i][0]] != null) {
@@ -403,11 +407,11 @@ function findFunction(list:{[key:string]:Device|null},data:cmdData,type?:number)
 
 var app:any = express();
 app.get("/", function (req:any, res:any) {
-	res.send(fs.readFileSync("C:/Users/Curse/Desktop/programming/nodejs/Mocs 2.0/Webserver/index.html", "utf8"));
+	res.redirect("/index.html");
 });
 ["/index.html","/index.js","/index.css","/favicon.ico","/favicon.png"].forEach((i) => {
     app.get(i, function (req:any, res:any) {
-        res.sendFile("C:/Users/Curse/Desktop/programming/nodejs/Mocs 2.0/Webserver" + i, "utf8");
+        res.sendFile(__dirname + "/Webserver" + i, "utf8");
     });
 });
 //#region LocalDevices
@@ -425,8 +429,8 @@ var localdevices:{ [key:string]:LocalDevice } = {
                 "toggle":{name:"Toggle",parameters:[{name:"device",type:"string",nullable:true,defaultValue:"Test"}],public:true},
                 "play":{name:"Play",parameters:[{name:"link",type:"string",nullable:true,defaultValue:""},{name:"device",type:"string",nullable:true,defaultValue:"Test"}],public:true},
                 "pause":{name:"Pause",parameters:[{name:"device",type:"string",nullable:true,defaultValue:"Test"}],public:true},
-                "skipNext":{name:"SkipNext",parameters:[{name:"device",type:"string",nullable:true,defaultValue:"Test"}],public:true},
-                "skipPrevious":{name:"SkipPrevious",parameters:[{name:"device",type:"string",nullable:true,defaultValue:"Test"}],public:true},
+                "skipnext":{name:"SkipNext",parameters:[{name:"device",type:"string",nullable:true,defaultValue:"Test"}],public:true},
+                "skipprevious":{name:"SkipPrevious",parameters:[{name:"device",type:"string",nullable:true,defaultValue:"Test"}],public:true},
                 "authenticate":{name:"Authenticate",parameters:[],"public":true}
             },
             devices:{}

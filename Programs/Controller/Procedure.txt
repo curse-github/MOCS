@@ -1,0 +1,6 @@
+
+copy contents of this directory into /home/pi
+using " sudo vim /etc/rc.local " remove oled-start code from the file and add back in " /home/pi/run.sh "
+run " sudo chmod 777 /home/pi/setup.sh "
+run " sudo /home/pi/setup.sh "
+this will disable the current demo screen that runs on startup
