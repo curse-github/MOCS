@@ -85,7 +85,7 @@ function SpotifyPlay(link?:null|string, device?:string|null, account?:string|nul
                                 reject(6); console.log("That device is not avaliable to play music.");
                             } else if (json.error.reason == "NO_ACTIVE_DEVICE") {
                                 //find device to play on
-                                httpsRequestPromise("accounts.spotify.com","/v1/me/player/devices","GET",{"Accept":"application/json","Content-Type":"application/json","Authorization":"Bearer " + SpotifyAccessTokenPer},null)
+                                httpsRequestPromise("api.spotify.com","/v1/me/player/devices","GET",{"Accept":"application/json","Content-Type":"application/json","Authorization":"Bearer " + SpotifyAccessTokenPer},null)
                                 .then((curl:string) => {
                                     try {
                                         if (JSON.parse(curl)) {
@@ -455,7 +455,7 @@ function SpotifySkipNext(device?:string|null, account?:string|null) {
                                 reject(8);
                             } else if (json.error.reason == "NO_ACTIVE_DEVICE") {
                                 //find device to play on
-                                httpsRequestPromise("accounts.spotify.com","/v1/me/player/devices","GET",{"Accept":"application/json","Content-Type":"application/json","Authorization":"Bearer " + SpotifyAccessTokenPer},null)
+                                httpsRequestPromise("api.spotify.com","/v1/me/player/devices","GET",{"Accept":"application/json","Content-Type":"application/json","Authorization":"Bearer " + SpotifyAccessTokenPer},null)
                                 .then((curl:string) => {
                                     try {
                                         if (JSON.parse(curl)) {
@@ -533,7 +533,7 @@ function SpotifySkipPrevious(device?:string|null, account?:string|null) {
                             if (json.error.message == "The access token expired") {
                                 var SpotifyRefreshTokenPer:null|string = fs.readFileSync("Spotify/RefreshToken" + (account != null ? account : "") + ".txt", 'utf8');
                                 if (SpotifyRefreshTokenPer != null && SpotifyRefreshTokenPer != "") {
-                                    httpsRequestPromise("spotify.com","/api/token","POST",{"Content-Type":"application/x-www-form-urlencoded","Accept":"application/json"},"grant_type=refresh_token&refresh_token=" + SpotifyRefreshTokenPer + "&client_id=" + SpotifyClientID + "&client_secret=" + SpotifyClientSecret)
+                                    httpsRequestPromise("accounts.spotify.com","/api/token","POST",{"Content-Type":"application/x-www-form-urlencoded","Accept":"application/json"},"grant_type=refresh_token&refresh_token=" + SpotifyRefreshTokenPer + "&client_id=" + SpotifyClientID + "&client_secret=" + SpotifyClientSecret)
                                     .then((curl:string) => {
                                         try {
                                             if (JSON.parse(curl)) {
@@ -564,7 +564,7 @@ function SpotifySkipPrevious(device?:string|null, account?:string|null) {
                                 reject(8);
                             } else if (json.error.reason == "NO_ACTIVE_DEVICE") {
                                 //find device to play on
-                                httpsRequestPromise("spotify.com","/v1/me/player/devices","GET",{"Accept":"application/json","Content-Type":"application/json","Authorization":"Bearer " + SpotifyAccessTokenPer},null)
+                                httpsRequestPromise("api.spotify.com","/v1/me/player/devices","GET",{"Accept":"application/json","Content-Type":"application/json","Authorization":"Bearer " + SpotifyAccessTokenPer},null)
                                 .then((curl:string) => {
                                     try {
                                         if (JSON.parse(curl)) {

@@ -3,8 +3,6 @@
  * 
  * MAIN:
  * 
- * login redo!
- * 
  * SIDE
  * 
  * device code for pi computer - runs on startup
@@ -204,8 +202,8 @@ function handleCommand(msg:string|command, websocket?:any) {
                         }
                         if (condition2) {//login is valid
                             var tmp:Array<any>|{[key:string|number]:any}|null = cloneObject(devices);
-                            assert(typeof tmp == "object" && tmp != null);
-                            var devicesClone:{ [key:string]:Device|null }|null = tmp!;
+                            assert(tmp != null && typeof tmp == "object");
+                            var devicesClone:{ [key:string]:Device|null } = tmp! as { [key:string]:Device|null };
                             var callback:Function = function(objIn:{ [key:string]:Device|null }) {
                                 var obj:any = cloneObject(objIn);
                                 Object.keys(obj!).forEach((i) => {
@@ -426,11 +424,13 @@ var localdevices:{ [key:string]:LocalDevice } = {
         device:{
             name:"Spotify",
             functions:{
-                "toggle":{name:"Toggle",parameters:[{name:"device",type:"string",nullable:true,defaultValue:"Test"}],public:true},
-                "play":{name:"Play",parameters:[{name:"link",type:"string",nullable:true,defaultValue:""},{name:"device",type:"string",nullable:true,defaultValue:"Test"}],public:true},
-                "pause":{name:"Pause",parameters:[{name:"device",type:"string",nullable:true,defaultValue:"Test"}],public:true},
-                "skipnext":{name:"SkipNext",parameters:[{name:"device",type:"string",nullable:true,defaultValue:"Test"}],public:true},
-                "skipprevious":{name:"SkipPrevious",parameters:[{name:"device",type:"string",nullable:true,defaultValue:"Test"}],public:true},
+                "toggle"      :{name:"Toggle"      ,parameters:[{name:"device",type:"string",nullable:true,defaultValue:"Test"}                                                                ],public:true},
+                "play"        :{name:"Play"        ,parameters:[{name:"link"  ,type:"string",nullable:true,defaultValue:""    },{name:"device",type:"string",nullable:true,defaultValue:"Test"}],public:true},
+                "pause"       :{name:"Pause"       ,parameters:[{name:"device",type:"string",nullable:true,defaultValue:"Test"}                                                                ],public:true},
+                "skipnext"    :{name:"SkipNext"    ,parameters:[{name:"device",type:"string",nullable:true,defaultValue:"Test"}                                                                ],public:true},
+                "skipprevious":{name:"SkipPrevious",parameters:[{name:"device",type:"string",nullable:true,defaultValue:"Test"}                                                                ],public:true},
+                "volumeup"    :{name:"VolumeUp"    ,parameters:[{name:"device",type:"string",nullable:true,defaultValue:"Test"},{name:"amount",type:"number",nullable:true,defaultValue:"10"  }],public:true},
+                "volumedown"  :{name:"VolumeDown"  ,parameters:[{name:"device",type:"string",nullable:true,defaultValue:"Test"},{name:"amount",type:"number",nullable:true,defaultValue:"10"  }],public:true},
                 "authenticate":{name:"Authenticate",parameters:[],"public":true}
             },
             devices:{}
@@ -439,26 +439,34 @@ var localdevices:{ [key:string]:LocalDevice } = {
             "spotify.authenticate()": function (parameters:null, websocket:any) {
                 websocket.send("{\"type\":\"redirect\",\"data\":\"" + Spotify.Link + "\"}");
             },
-            "spotify.play()": function (parameters:Array<string>) {
-                Spotify.SpotifyPlay(parameters[0],null,parameters[1])
+            "spotify.play()"        : function (parameters:Array<string>) {
+                Spotify.SpotifyPlay        (parameters[0],null,parameters[1]                        )
                 .then((val:boolean) => {}).catch((err:number) => {});
             },
-            "spotify.pause()": function (parameters:Array<string>) {
-                Spotify.SpotifyPause(parameters[0])
+            "spotify.pause()"       : function (parameters:Array<string>) {
+                Spotify.SpotifyPause       (                   parameters[0]                        )
                 .then((val:boolean) => {}).catch((err:number) => {});
             },
-            "spotify.toggle()": function (parameters:Array<string>) {
-                Spotify.SpotifyToggle(null,parameters[0])
+            "spotify.toggle()"      : function (parameters:Array<string>) {
+                Spotify.SpotifyToggle      (              null,parameters[0]                        )
                 .then((val:boolean) => {}).catch((err:number) => {});
             },
-            "spotify.skipnext()": function (parameters:Array<string>) {
-                Spotify.SpotifySkipNext(null,parameters[0])
+            "spotify.skipnext()"    : function (parameters:Array<string>) {
+                Spotify.SpotifySkipNext    (              null,parameters[0]                        )
                 .then((val:boolean) => {}).catch((err:number) => {});
             },
             "spotify.skipprevious()": function (parameters:Array<string>) {
-                Spotify.SpotifySkipPrevious(null,parameters[0])
+                Spotify.SpotifySkipPrevious(              null,parameters[0]                        )
                 .then((val:boolean) => {}).catch((err:number) => {});
-            }
+            },/*
+            "spotify.volumeup()"    : function (parameters:Array<string>) {
+                Spotify.SpotifyVolumeUp    (              null,parameters[0],parseInt(parameters[1]))
+                .then((           ) => {}).catch((err:number) => {});
+            },
+            "spotify.volumedown()"  : function (parameters:Array<string>) {
+                Spotify.SpotifyVolumeDown  (              null,parameters[0],parseInt(parameters[1]))
+                .then((           ) => {}).catch((err:number) => {});
+            }*/
         },
         "Rest":{
             "/SetSpotifyToken":function (req:any, res:any) {
@@ -471,24 +479,30 @@ var localdevices:{ [key:string]:LocalDevice } = {
                     console.log("spotify token error: " + req.query.error);
                 }
             },
-            "/SpotifyPlay":function (req:any, res:any) {
-                Spotify.SpotifyPlay(null,null,"Test").then((val:boolean) => { res.send(val); }).catch((err) => { res.send("null") });
+            "/SpotifyPlay"        :function (req:any, res:any) {
+                Spotify.SpotifyPlay        (null, null, "Test").then((val:boolean   ) => { res.send(val);                                              }).catch((err) => { res.send("null") });
             },
-            "/SpotifySkipNext":function (req:any, res:any) {
-                Spotify.SpotifySkipNext(null, "Test").then((val:boolean) => { res.send(val); }).catch((err) => { res.send("null") });
+            "/SpotifySkipNext"    :function (req:any, res:any) {
+                Spotify.SpotifySkipNext    (      null, "Test").then((val:boolean   ) => { res.send(val);                                              }).catch((err) => { res.send("null") });
             },
             "/SpotifySkipPrevious":function (req:any, res:any) {
-                Spotify.SpotifySkipPrevious(null, "Test").then((val:boolean) => { res.send(val); }).catch((err) => { res.send("null") });
+                Spotify.SpotifySkipPrevious(      null, "Test").then((val:boolean   ) => { res.send(val);                                              }).catch((err) => { res.send("null") });
             },
-            "/SpotifyPause":function (req:any, res:any) {
-                Spotify.SpotifyPause("Test").then((val:boolean) => { res.send(val); }).catch((err) => { res.send("null") });
+            "/SpotifyPause"       :function (req:any, res:any) {
+                Spotify.SpotifyPause       (            "Test").then((val:boolean   ) => { res.send(val);                                              }).catch((err) => { res.send("null") });
             }, 
-            "/SpotifyToggle":function (req:any, res:any) {
-                Spotify.SpotifyToggle(null, "Test").then((val:boolean) => { res.send(val); }).catch((err) => { res.send("null") });
+            "/SpotifyToggle"      :function (req:any, res:any) {
+                Spotify.SpotifyToggle      (      null, "Test").then((val:boolean   ) => { res.send(val);                                              }).catch((err) => { res.send("null") });
             },
-            "/SpotifyStatus":function (req:any, res:any) {
-                Spotify.SpotifyStatus("Test").then((val:Array<any>) => { res.send("["+val[0]+", [\""+val[1]+"\", \""+val[2]+"\"]]"); }).catch((err:number) => {res.send("[\"error" + err + "\", []]") });;
-            }
+            "/SpotifyStatus"      :function (req:any, res:any) {
+                Spotify.SpotifyStatus      (            "Test").then((val:Array<any>) => { res.send("["+val[0]+", [\""+val[1]+"\", \""+val[2]+"\"]]"); }).catch((err:number) => {res.send("[\"error" + err + "\", []]") });
+            },/*
+            "/SpotifyVolumeUp"    :function (req:any, res:any) {
+                Spotify.SpotifyVolumeUp    (      null, "Test").then((json:any      ) => { res.send("");console.log("json: ");console.log(json);       }).catch((err) => { res.send("null") });
+            },
+            "/SpotifyVolumeDown"  :function (req:any, res:any) {
+                Spotify.SpotifyVolumeDown  (      null, "Test").then((json:any      ) => { res.send("");console.log("json: ");console.log(json);       }).catch((err) => { res.send("null") });
+            }*/
         }
     },
     "Lamp":{
