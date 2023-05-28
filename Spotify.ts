@@ -1,25 +1,26 @@
+const fs:any = require("fs");
+import {assert, httpsRequestPromise} from "./Lib";
+const SpotifyClientID    :string = fs.readFileSync(__dirname+"/Spotify/ClientID.txt"    , 'utf8');
+const SpotifyClientSecret:string = fs.readFileSync(__dirname+"/Spotify/ClientSecret.txt", 'utf8');
+const redirectLink       :string = fs.readFileSync(__dirname+"/Spotify/Redirect.txt"    , 'utf8');
+const Link               :string = "https://accounts.spotify.com/authorize?client_id=" + SpotifyClientID + "&response_type=code&redirect_uri=" + redirectLink + "&scope=user-modify-playback-state user-read-playback-position user-read-currently-playing user-read-recently-played user-read-playback-state";
 
-const fs = require("fs");
-import {httpsRequestPromise} from "./Lib";
-
-const SpotifyClientID = fs.readFileSync("Spotify/ClientID.txt", 'utf8');
-const SpotifyClientSecret = fs.readFileSync("Spotify/ClientSecret.txt", 'utf8');
-const redirectLink = fs.readFileSync("Spotify/Redirect.txt", 'utf8');
-const Link = "https://accounts.spotify.com/authorize?client_id=" + SpotifyClientID + "&response_type=code&redirect_uri=" + redirectLink + "&scope=user-modify-playback-state user-read-playback-position user-read-currently-playing user-read-recently-played user-read-playback-state";
-function GetSpotifyToken(code:string) {
-    httpsRequestPromise("api.spotify.com","/api/token","POST",{"Content-Type":"application/x-www-form-urlencoded","Accept":"application/json"},"grant_type=authorization_code&code=" + code + "&redirect_uri=" + redirectLink + "&client_id=" + SpotifyClientID + "&client_secret=" + SpotifyClientSecret)
+//#region library
+function SpotifyGetToken(code:string) {
+    httpsRequestPromise("accounts.spotify.com","/api/token","POST",{"Content-Type":"application/x-www-form-urlencoded","Accept":"application/json"},"grant_type=authorization_code&code=" + code + "&redirect_uri=" + redirectLink + "&client_id=" + SpotifyClientID + "&client_secret=" + SpotifyClientSecret)
     .then((curl:string) => {
         try {
-            if (JSON.parse(curl)) {
+            if (curl == "") { return; }
+            else if (JSON.parse(curl)) {
                 var json:any = JSON.parse(curl);
                 if (json.error != null) {
-                    console.log("SpotifyGetTokenError1: " + json.error);
+                    console.log("SpotifyGetTokenError1: " + JSON.stringify(json.error)); return;
                 } else {
-                    fs.writeFileSync("Spotify/AccessToken" + "Test" + ".txt",json.access_token)
-                    fs.writeFileSync("Spotify/RefreshToken" + "Test" + ".txt",json.refresh_token)
+                    fs.writeFileSync(__dirname+"/Spotify/AccessToken"  + "Test" + ".txt",json.access_token)
+                    fs.writeFileSync(__dirname+"/Spotify/RefreshToken" + "Test" + ".txt",json.refresh_token)
                 }
             }
-        } catch (err:any) { console.log("SpotifyGetTokenError2: " + err); }
+        } catch (err:any) { console.log("SpotifyGetTokenError2: " + err); return; }
     }).catch((err:any) => {
         if (err.toString() != "SyntaxError: Unexpected end of JSON input") {
             console.log("SpotifyGetTokenError3: " + err);
@@ -27,609 +28,575 @@ function GetSpotifyToken(code:string) {
     });
 }
 
-/**
- * Starts spotify playback on account selected
- * @param [link] A link to the song, playlist, album, (.etc) you want to play(optional)
- * @param [device] The device you want to play on(optional)
- * @param [account] The keyword for the account to play on(optional)
- * @returns none
- */
-function SpotifyPlay(link?:null|string, device?:string|null, account?:string|null) {
-    return new Promise<boolean>((resolve, reject) => {
-        var SpotifyAccessTokenPer:null|string = null;
-        try { SpotifyAccessTokenPer = fs.readFileSync("Spotify/AccessToken" + (account != null ? account : "") + ".txt", 'utf8');
-        } catch (err) { reject(1); console.log("SpotifyPlayFileError1: " + err); return; }
-        
-        if (SpotifyAccessTokenPer != null && SpotifyAccessTokenPer != "") {
-            var data:Object = {};
-            if (link != null) {
-                if (link.includes("open.spotify.com/") && (link.includes("playlist") || link.includes("album") || link.includes("show") || link.includes("track") || link.includes("artist") || link.includes("episode"))) {
-                    link = link.replace("https://",""); link = link.replace("open.","");
-                    link = link.replace(".com/",":"); link = link.replace("/",":");
-                    link = link.split("?")[0];
-                    data = { "context_uri": link };
-                }
-            }
-            httpsRequestPromise("api.spotify.com","/v1/me/player/play" + ((device == null || device == "") ? "" : "?device_id=" + device),"PUT",{"Accept":"application/json","Content-Type":"application/json","Authorization":"Bearer " + SpotifyAccessTokenPer},((Object.keys(data).length === 0) ? null : JSON.stringify(data)))
-            .then((curl:string) => {
+function SpotifyTokenRequest  (functionName:string,account?:string|null) {
+    return new Promise<[boolean,string,string]>(async( resolve:((value?:any)=>void), reject:((reason?:any)=>void) )=>{
+        var SpotifyRefreshTokenTmp:null|string = null;
+        try { SpotifyRefreshTokenTmp = fs.readFileSync(__dirname+"/Spotify/RefreshToken" + (account||"") + ".txt", 'utf8');
+        } catch (err) { reject(1); console.log("Spotify"+functionName+"FileError1: " + err); return; }
+
+        if (SpotifyRefreshTokenTmp != null && SpotifyRefreshTokenTmp != "") {
+            httpsRequestPromise("accounts.spotify.com","/api/token","POST",{"Content-Type":"application/x-www-form-urlencoded","Accept":"application/json"},"grant_type=refresh_token&refresh_token=" + SpotifyRefreshTokenTmp + "&client_id=" + SpotifyClientID + "&client_secret=" + SpotifyClientSecret)
+            .then ((curl:string) => {
                 try {
-                    if (JSON.parse(curl) != null) {
+                    if (curl == "") { reject([2]); }
+                    else if (JSON.parse(curl)) {
                         var json:any = JSON.parse(curl);
-                        if (json.error != null) {
+                        if (json.error == null) {
+                            //set refreshed token and retry function
+                            try {
+                                fs.writeFileSync("Spotify/AccessToken" + (account||"") + ".txt",json.access_token);
+                                resolve();
+                            } catch (err:any) {
+                                reject(3); //console.log("Spotify"+functionName+"TryCatchError1: " + err);
+                            }
+                        } else {
+                            reject(4); console.log("Spotify"+functionName+"ServerError1: " + JSON.stringify(json));
+                        }
+                    } else {
+                        reject(5); console.log("Spotify"+functionName+"JsonError1: could not parse json");
+                    }
+                } catch (err) {
+                    reject(6); console.log("Spotify"+functionName+"TryCatchError2: " + err);
+                }
+            }).catch((err:Error) => {
+                reject(7); console.log("Spotify"+functionName+"HttpsRequestError1: " + err);
+            });
+        } else {
+            reject(8); console.log("Spotify"+functionName+"TokenError4: Spotify refresh token not found");
+        }
+    });
+}
+
+/**
+ * makes a request to the spotify api, handles errors, and resolves with the json output
+ * @date 5/26/2023
+ *
+ * @param {string} functionName used to display errors
+ * @param {(string|null)} account
+ * @param {string} path path to put after "/v1/me/player"
+ * @param {("GET"|"POST"|"PUT")} method https request method to be used
+ * @param {(string|null)} data POST/PUSH data
+ * @param {(()=>void)} onrefresh function called after refreshing token if needed
+ * 
+ * @example
+ * rejects with codes 1-15
+ * general json error code is 13
+ */
+function SpotifyMeRequest     (functionName:string, account:string|null, path:string, method:"GET"|"POST"|"PUT", data:string|null, refresh:boolean=false, onrefresh?:(()=>void)):Promise<any> {
+    return new Promise<any>(async( resolve:((value?:any)=>void), reject:((reason?:any)=>void) )=>{
+        var SpotifyAccessTokenTmp:null|string = null;
+        try { SpotifyAccessTokenTmp = fs.readFileSync(__dirname+"/Spotify/AccessToken" + (account||"") + ".txt", 'utf8');
+        } catch (err) { reject([1]); console.log("Spotify"+functionName+"FileError2: " + err); return; }//error code 1  or error code 19
+
+        httpsRequestPromise("api.spotify.com","/v1/me/player"+path,method,{"Accept":"application/json","Content-Type":"application/json","Authorization":"Bearer " + SpotifyAccessTokenTmp},data)
+        .then ((curl:string) => {
+            try {
+                if (curl == "") { reject([2]); }//error code 2  or error code 20
+                else if (JSON.parse(curl)) {
+                    var json:any = JSON.parse(curl);
+                    if (json.error != null) {
+                        if (refresh) {
                             if (json.error.message == "The access token expired" || json.error.message == "Invalid access token") {
-                                var SpotifyRefreshTokenPer:null|string = fs.readFileSync("Spotify/RefreshToken" + (account != null ? account : "") + ".txt", 'utf8');
-                                if (SpotifyRefreshTokenPer != null && SpotifyRefreshTokenPer != "") {
-                                    httpsRequestPromise("accounts.spotify.com","/api/token","POST",{"Content-Type":"application/x-www-form-urlencoded","Accept":"application/json"},"grant_type=refresh_token&refresh_token=" + SpotifyRefreshTokenPer + "&client_id=" + SpotifyClientID + "&client_secret=" + SpotifyClientSecret)
-                                    .then((curl:string) => {
-                                        try {
-                                            if (JSON.parse(curl)) {
-                                                var json:any = JSON.parse(curl);
-                                                if (json.error == null) {
-                                                    //set refreshed token and retry function
-                                                    fs.writeFileSync("Spotify/AccessToken" + (account != null ? account : "") + ".txt",json.access_token);
-                                                    SpotifyPlay(link,device,account).then(resolve).catch(reject);
-                                                } else {
-                                                    reject(2); console.log("SpotifyPlayJsonError1: " + json.error);
-                                                }
-                                            }
-                                        } catch (err:any) {
-                                            reject(3); console.log("SpotifyPlayTryCatchError1: " + err);
-                                        }
-                                    }).catch((err:Error) => {
-                                        reject(4); console.log("SpotifyPlayhttpsRequestError1: " + err);
-                                    });
-                                } else {
-                                    reject(5); console.log("SpotifyPlayTokenError1: Spotify refresh token not found");
-                                }
-                            } else if (json.error.message == "Device not found") {
-                                reject(6); console.log("That device is not avaliable to play music.");
-                            } else if (json.error.reason == "NO_ACTIVE_DEVICE") {
-                                //find device to play on
-                                httpsRequestPromise("api.spotify.com","/v1/me/player/devices","GET",{"Accept":"application/json","Content-Type":"application/json","Authorization":"Bearer " + SpotifyAccessTokenPer},null)
-                                .then((curl:string) => {
-                                    try {
-                                        if (JSON.parse(curl)) {
-                                            var json:any = JSON.parse(curl);
-                                            if (json.error != null) {
-                                                if (json.error.message == "The access token expired") {
-                                                    reject(7); console.log("SpotifyPlayError2: Spotify refresh token expired");
-                                                } else if (json.error.message == "Invalid access token") {
-                                                    reject(8); console.log("Access token is invalid, Reauthentication is required.2");console.log(json.error.status);
-                                                } else {
-                                                    reject(9); console.log("SpotifyPlayJsonError2: " + JSON.stringify(json.error));
-                                                }
-                                            } else {
-                                                //play on first device
-                                                var list:Array<any> = json.devices.filter((item:any)=>item.name!="32\" TCL Roku TV");
-                                                if (list.length > 0) {
-                                                    console.log("Force playing on " + list[0].name);
-                                                    SpotifyPlay(link,list[0].id,account).then(resolve).catch(reject);
-                                                } else {
-                                                    resolve(false); console.log("No device is avaliable to play music.");
-                                                }
-                                            }
-                                        } else {
-                                            reject(10); console.log("SpotifySkipPreviousJsonError: could not parse json");
-                                        }
-                                    } catch (err:any) {
-                                        reject(11); console.log("SpotifyPlayTryCatchError2: " + err);
-                                    }
-                                }).catch((err:Error) => {
-                                    //special error cases
-                                    if (("" + err).startsWith("Error: getaddrinfo ENOTFOUND ")) {
-                                        reject(12); console.log("SpotifyPlayhttpsRequestError2: " + (""+err).slice("Error: getaddrinfo ENOTFOUND ".length) + " address info not found.");
-                                    } else if (("" + err).startsWith("Error: connect ETIMEDOUT ")) {
-                                        reject(13); console.log("SpotifyPlayhttpsRequestError3: " + (""+err).slice("Error: connect ETIMEDOUT ".length) + " connection timed out.");
-                                    } else {
-                                        reject(14); console.log("SpotifyPlayhttpsRequestError4: " + err);
-                                    }
-                                });
-                            } else if (json.error.message == "Player command failed: Restriction violated") {
-                                resolve(true); //console.log("That device is already playing music.");
-                            } else if (json.error.message == "Invalid context uri") {
-                                console.log("Invalid music link.");
-                                SpotifyPlay(null,device,account).then(resolve).catch(reject);
+                                SpotifyTokenRequest(functionName,account)
+                                .then(onrefresh||(()=>{}))
+                                .catch(async(reason:number)=>{ reject([reason+2]); });//maps errors 1-8 into 3-10
                             } else {
-                                if (json.error.status == 502) {
-                                    reject(15); console.log("SpotifyPlayJsonError3: \"Bad gateway.\"");
-                                } else {
-                                    reject(16); console.log("SpotifyPlayJsonError4: " + JSON.stringify(json.error));
-                                }
+                                reject([13,json.error]); //console.log("Spotify"+functionName+"JsonError2: " + JSON.stringify(json.error));//error code 13 or error code 31
+                            }
+                        }else {
+                            if (json.error.message == "The access token expired") {
+                                reject([11]); console.log("Spotify"+functionName+"TokenError5: Spotify refresh token expired.");//error code 11 or error code 29
+                            } else if (json.error.message == "Invalid access token") {
+                                reject([12]); console.log("Spotify"+functionName+"TokenError6: Access token is invalid, Reauthentication is required.");//error code 12 or error code 30
+                            } else {
+                                reject([13,json.error]); //console.log("Spotify"+functionName+"JsonError3: " + JSON.stringify(json.error));//error code 13 or error code 31
                             }
                         }
                     } else {
-                        reject(17); console.log("SpotifyPlayJsonError4: could not parse json");
+                        resolve(json);
                     }
-                } catch (err:any) {
-                    if (err.toString() != "SyntaxError: Unexpected end of JSON input") {
-                        reject(18); console.log("SpotifyPlayTryCatchError5: " + err);
-                        console.log("\n" + curl);
-                    }
-                    else { resolve(true); /*play successful*/ }
-                }
-            }).catch((err:Error) => {
-                if (("" + err).startsWith("Error: getaddrinfo ENOTFOUND ")) {
-                    reject(19); console.log("SpotifyPlayhttpsRequestError5: " + (""+err).slice("Error: getaddrinfo ENOTFOUND ".length) + " address info not found.");
-                } else if (("" + err).startsWith("Error: connect ETIMEDOUT ")) {
-                    reject(20); console.log("SpotifyPlayhttpsRequestError6: " + (""+err).slice("Error: connect ETIMEDOUT ".length) + " connection timed out.");
                 } else {
-                    reject(21); console.log("SpotifyPlayhttpsRequestError7: " + err);
+                    reject([14]); console.log("Spotify"+functionName+"JsonError4: could not parse json");//error code 14 or error code 32
                 }
-            });
-        }
+            } catch (err:any) {
+                if (err.toString() != "SyntaxError: Unexpected end of JSON input") {
+                    reject([15]); console.log("Spotify"+functionName+"TryCatchError3: " + err);//error code 15 or error code 33
+                } else {console.log(err);}
+            }
+        }).catch((err:Error) => {
+            if (("" + err).startsWith("Error: getaddrinfo ENOTFOUND "   )) {
+                reject([16]); console.log("Spotify"+functionName+"HttpsRequestError2: " + (""+err).slice(29) + " address info not found.");//error code 16 or error code 34
+            } else if (("" + err).startsWith("Error: connect ETIMEDOUT ")) {
+                reject([17]); console.log("Spotify"+functionName+"HttpsRequestError3: " + (""+err).slice(25) + " connection timed out."  );//error code 17 or error code 35
+            } else {
+                reject([18]); console.log("Spotify"+functionName+"HttpsRequestError4: " + err);//error code 18 or error code 36
+            }
+        });
     });
 }
 
 /**
- * Stops spotify playback on account selected
- * @param [account] The keyword for the account to stop playback on(optional)
- * @returns none
+ * makes a request to the spotify api, handles errors, and resolves with the json output
+ * @date 5/26/2023
+ *
+ * @param {string} functionName used to display errors
+ * @param {(string|null)} account
+ * @param {string} path path to put after "/v1/me/player"
+ * @param {("GET"|"POST"|"PUT")} method https request method to be used
+ * @param {(string|null)} data POST/PUSH data
+ * 
+ * @example
+ * rejects with codes 1-36
+ * 
+ * codes 1, 2 and 11-18 are from the initial request
+ * codes   3-10         are from refressing the token
+ * codes  19-36         are from the request after refressing
+ * 
+ * general json error codes are 13 and 31
  */
-function SpotifyPause(account?:string|null) {
-    return new Promise<boolean>((resolve,reject) => {
-        var SpotifyAccessTokenPer:null|string = null;
-        try { SpotifyAccessTokenPer = fs.readFileSync("Spotify/AccessToken" + (account != null ? account : "") + ".txt", 'utf8');
-        } catch (err) { reject(1); console.log("SpotifyPauseFileError1: " + err); return; }
-        if (SpotifyAccessTokenPer != null && SpotifyAccessTokenPer != "") {
-            httpsRequestPromise("api.spotify.com","/v1/me/player/pause","PUT",{"Accept":"application/json","Content-Type":"application/json","Authorization":"Bearer " + SpotifyAccessTokenPer},null)
-            .then((curl:string) => {
-                try {
-                    if (JSON.parse(curl)) {
-                        var json:any = JSON.parse(curl);
-                        if (json.error.message == "The access token expired") {
-                            //get the refreshtoken
-                            var SpotifyRefreshTokenPer:null|string = fs.readFileSync("Spotify/RefreshToken" + (account != null ? account : "") + ".txt", 'utf8');
-                            if (SpotifyRefreshTokenPer != null && SpotifyRefreshTokenPer != "") {
-                                //refresh the token
-                                httpsRequestPromise("accounts.spotify.com","/api/token","POST",{"Content-Type":"application/x-www-form-urlencoded","Accept":"application/json"},"grant_type=refresh_token&refresh_token=" + SpotifyRefreshTokenPer + "&client_id=" + SpotifyClientID + "&client_secret=" + SpotifyClientSecret)
-                                .then((curl:string) => {
-                                    try {
-                                        if (JSON.parse(curl)) {
-                                            var json:any = JSON.parse(curl);
-                                            if (json.error == null) {
-                                                //set refreshed token and retry function
-                                                fs.writeFileSync("Spotify/AccessToken" + (account != null ? account : "") + ".txt",json.access_token);
-                                                SpotifyPause(account).then(resolve).catch(reject);
-                                            } else {
-                                                reject(2); console.log("SpotifyPauseJsonError1: " + json.error);
-                                            }
-                                        }
-                                    } catch (err:any) {
-                                        reject(3); console.log("SpotifyPauseTryCatchError1: " + err);
-                                    }
-                                }).catch((err:Error) => {
-                                    reject(4); console.log("SpotifyPausehttpsRequestError1: " + err);
-                                });
-                            } else {
-                                reject(5); console.log("SpotifyPauseTokenError1: Spotify refresh token not found");
-                            }
-                        } else if (json.error.message == "Device not found") {
-                            reject(6); console.log("That device is not avaliable to play music.");
-                        } else if (json.error.message == "Invalid access token") {
-                            reject(7); console.log("Access token is invalid, Reauthentication is required.");
-                        } else if (json.error.reason == "NO_ACTIVE_DEVICE") {
-                            resolve(false); console.log("No device is currently playing music.");
-                        } else if (json.error.message == "Player command failed: Restriction violated") {
-                            reject(8);
-                        } else {
-                            reject(9); console.log("SpotifyPauseJsonError2: " + JSON.stringify(json.error));
-                        }
-                    } else {
-                        reject(10); console.log("SpotifyPauseJsonError3: could not parse json");
-                    }
-                } catch (err:any) {
-                    if (err.toString() != "SyntaxError: Unexpected end of JSON input") {
-                        console.log("SpotifyPauseTryCatchError2: " + err); reject(11);
-                    } else {
-                        //succesfully paused
-                        resolve(false);
-                    }
-                }
-            }).catch((err:Error) => {
-                reject(12); console.log("SpotifyPausehttpsRequestError2: " + err);
-            });
-        }
+function SpotifyMeRequestRetry(functionName:string, account:string|null, path:string, method:"GET"|"POST"|"PUT", data:string|null) {
+    return new Promise<any>(async( resolve:((value?:any)=>void), reject:((reason?:any)=>void) )=>{
+        SpotifyMeRequest(functionName,account,path,method,data,true,async()=>{
+            //onrefresh function
+            SpotifyMeRequest(functionName,account,path,method,data)
+            .then (resolve)
+            .catch((out:[number,any])=>{reject([out[0]+18,out[1]])});//maps errors 1-18 into 19-36
+        })
+        .then(resolve)
+        .catch(reject);
     });
 }
 
 /**
- * Toggles if playback is playing or paused on account selected
- * @param [device] The device you want to play on if there is not currently playback(optional)
- * @param [account] The keyword for the account to toggle playback on(optional)
- * @returns none
+ * makes a request to the spotify api, handles errors, and resolves with the json output
+ * @date 5/26/2023
+ *
+ * @param {string} functionName used to display errors
+ * @param {(string|null)} account
+ * 
+ * @example
+ * rejects with codes 1-36
+ * 
+ * codes 1, 2 and 11-18 are from the initial request
+ * codes   3-10         are from refressing the token
+ * codes  19-36         are from the request after refressing
+ * 
+ * general json error codes are 13 and 31
  */
-function SpotifyToggle(device?:string|null, account?:string|null) {
-    return new Promise<boolean>((resolve,reject) => {
-        var SpotifyAccessTokenPer:null|string = null;
-        try { SpotifyAccessTokenPer = fs.readFileSync("Spotify/AccessToken" + (account != null ? account : "") + ".txt", 'utf8');
-        } catch (err) { reject(1); console.log("SpotifyToggleFileError1: " + err); return; }
-        if (SpotifyAccessTokenPer != null && SpotifyAccessTokenPer != "") {
-            httpsRequestPromise("api.spotify.com","/v1/me/player","GET",{"Accept":"application/json","Content-Type":"application/json","Authorization":"Bearer " + SpotifyAccessTokenPer},null)
-            .then((curl:string) => {
-                try {
-                    if (JSON.parse(curl)) {
-                        var json:any = JSON.parse(curl);
-                        if (json.error != null) {
-                            if (json.error.message == "The access token expired") {
-                                var SpotifyRefreshTokenPer:null|string = fs.readFileSync("Spotify/RefreshToken" + (account != null ? account : "") + ".txt", 'utf8');
-                                if (SpotifyRefreshTokenPer != null && SpotifyRefreshTokenPer != "") {
-                                    httpsRequestPromise("accounts.spotify.com","/api/token","POST",{"Content-Type":"application/x-www-form-urlencoded","Accept":"application/json"},"grant_type=refresh_token&refresh_token=" + SpotifyRefreshTokenPer + "&client_id=" + SpotifyClientID + "&client_secret=" + SpotifyClientSecret)
-                                    .then((curl:string) => {
-                                        try {
-                                            if (JSON.parse(curl)) {
-                                                var json:any = JSON.parse(curl);
-                                                if (json.error == null) {
-                                                    //set refreshed token and retry function
-                                                    fs.writeFileSync("Spotify/AccessToken" + (account != null ? account : "") + ".txt",json.access_token);
-                                                    SpotifyToggle(device,account).then(resolve).catch(reject);
-                                                } else {
-                                                    reject(2); console.log("SpotifyToggleJsonError1: " + json.error);
-                                                }
-                                            } else {
-                                                reject(3); console.log("SpotifyToggleJsonError2: could not parse json");
-                                            }
-                                        } catch (err) {
-                                            reject(4); console.log("SpotifyToggleTryCatchError1: " + err);
-                                        }
-                                    }).catch((err:Error) => {
-                                        reject(5); console.log("SpotifyTogglehttpsRequestError1: " + err);
-                                    });
-                                } else {
-                                    reject(6); console.log("SpotifyToggleTokenError1: Spotify refresh token not found");
-                                }
-                            } else if (json.error.message == "Invalid access token") {
-                                reject(7); console.log("Access token is invalid, Reauthentication is required.");
-                            } else {
-                                reject(8); console.log("SpotifyToggleJsonError3: " + JSON.stringify(json.error));
-                            }
-                        } else {
-                            if (json.is_playing != null) {
-                                if (json.is_playing == true) {
-                                    SpotifyPause(account).then((val:boolean) => {
-                                        resolve(val);
-                                    }).catch((err:number) => {
-                                        reject(err+12);
-                                    });
-                                } else {
-                                    SpotifyPlay(null,device,account).then((val:boolean) => {
-                                        resolve(val);
-                                    }).catch((err:number) => {
-                                        reject(err+12);
-                                    });
-                                }
-                            } else {
-                                reject(9); console.log("SpotifyToggleError1: IsPlaying == null");
-                            }
-                        }
-                    } else {
-                        reject(10); console.log("SpotifyToggleJsonError4: could not parse json");
-                    }
-                } catch (err:any) {
-                    if (err.toString() != "SyntaxError: Unexpected end of JSON input") {
-                        reject(11); console.log("SpotifyToggleTryCatchError2: " + err);
-                    } else {
-                        SpotifyPlay(null,device,account).then((val:boolean) => {
-                            resolve(val);
-                        }).catch((err:number) => {
-                            reject(err+12);
-                        });
-                    }
-                }
-            }).catch((err:string) => {
-                reject(12); console.log("SpotifyTogglehttpsRequestError2: " + err);
-            });
+function getSpotifyDevices  (functionName:string,                    account:string|null):Promise<string[]          > {
+    return new Promise<string[]>(async( resolve:((value?:any)=>void), reject:((reason?:any)=>void) )=>{
+        SpotifyMeRequest(functionName,account,"/devices","GET",null)
+        .then ((json:any)=>{
+            //play on first device
+            var list:any[] = json.devices.filter((item:any)=>item.name!="32\" TCL Roku TV");//fuck you roku, lol
+            resolve(list);
+        })
+        .catch(reject);
+    });
+}
+//#endregion
+
+/**
+ * plays spotify
+ * @date 5/26/2023
+ *
+ * @param {(string|null)} link
+ * @param {(string|null)} device
+ * @param {(string|null)} account
+ * 
+ * @example
+ * rejects with codes 1-195
+ *  
+ * codes 1, 2 and 11-18 are from the initial request
+ * codes   3-10         are from refressing the token
+ * codes  19-36         are from the request after refressing
+ * codes  37-39         are from SpotifyPlay specifically
+ * codes  40-78         are from trying again after an invalid link was passed into the function
+ * codes  79-117        are from getting the devices on account if no device is found
+ * codes 118-195        are from trying to play again after chosing an avaliable device
+ */ 
+function SpotifyPlay        (link  :string|null, device:string|null, account:string|null):Promise<boolean           > {
+    return new Promise<boolean>(async( resolve:((value?:any)=>void), reject:((reason?:any)=>void) )=>{
+        var linkTmp:string|null = link;
+        if (link != null) {
+            if (link.includes("open.spotify.com/") && (link.includes("playlist") || link.includes("album") || link.includes("show") || link.includes("track") || link.includes("artist") || link.includes("episode"))) {
+                linkTmp = link;                         linkTmp = linkTmp.replace("https://","" )   ;
+                linkTmp = linkTmp.replace("open.","" ); linkTmp = linkTmp.replace(".com/"   ,":")   ;
+                linkTmp = linkTmp.replace("/"    ,":"); linkTmp = linkTmp.split  ("?"           )[0];
+            }
         }
+        SpotifyMeRequestRetry("Play",account,"/play"+((device==null||device=="")?"": "?device_id="+device ),"PUT",((linkTmp!=null&&linkTmp!="")?"{\"context_uri\":\""+linkTmp+"\"}":null))
+        .then (()=>{console.log();})//nothing needed
+        .catch(async(out:[number,any])=>{
+            if (out[0]==13||out[0]==31) {
+                var [reason,err]:[number,any] = out;
+                assert(err != null);
+                if (err.message == "Device not found") {
+                    reject(37); console.log("That device is not avaliable to play music.");
+                } else if (err.reason == "NO_ACTIVE_DEVICE") {
+                    getSpotifyDevices("Play",account)//find device to play on
+                    .then(async(list:any)=>{
+                        if (list.length > 0) {
+                            console.log("Force playing on " + list[0].name);
+                            SpotifyPlay(link,list[0].id,account)
+                            .then(resolve)
+                            .catch((out:[number,any])=>{reject(out[0]+117)});//maps errors 1-78 into 118-156
+                        } else { console.log("No device is avaliable to play music."); }
+                    })
+                    .catch((out:[number,any])=>{reject(out[0]+78)});//maps errors 1-39 into 79-117
+                } else if (err.message == "Player command failed: Restriction violated") {
+                    resolve(true); //console.log("That device is already playing music.");
+                } else if (err.message == "Invalid context uri") {
+                    console.log("SpotifyPlayInputError1: Invalid music link.");
+                    SpotifyPlay(null,device,account).then(resolve).catch((out:[number,any])=>{reject(out[0]+39)});//maps errors 1-39 into 40-78
+                } else if (err.status == 502) {
+                    reject(38); console.log("SpotifyPlayHttpsError1: \"Bad gateway.\"");
+                } else {
+                    reject(39); console.log("SpotifyPlayJsonError5: " + JSON.stringify(err));
+                }
+            } else if (out[0] == 2) {
+                resolve(true);
+            } else reject(out[0]);
+        });
     });
 }
 
 /**
- * Gets the playback status of the account selected
- * @param [account] The keyword for the account to get status of(optional)
- * @returns A promise which supplies if there is currently playback, what the song name is, and the artist/album name
- */
-function SpotifyStatus(account?:string|null) {
-    return new Promise<Array<any>>((resolve, reject) => {
-        var SpotifyAccessTokenPer:null|string = null;
-        try { SpotifyAccessTokenPer = fs.readFileSync("Spotify/AccessToken" + (account != null ? account : "") + ".txt", 'utf8');
-        } catch (err) { reject(1); console.log("SpotifyStatusFileError1: " + err); return; }
-        if (SpotifyAccessTokenPer != null && SpotifyAccessTokenPer != "") {
-            httpsRequestPromise("api.spotify.com","/v1/me/player","GET",{"Accept":"application/json","Content-Type":"application/json","Authorization":"Bearer " + SpotifyAccessTokenPer},null)
-            .then((curl:string) => {
-                try {
-                    if (curl == "") {
-                        resolve([false,"",""]);
-                    } else if (JSON.parse(curl)) {
-                        var json:any = JSON.parse(curl);
-                        if (json.error != null) {
-                            if (json.error.message == "The access token expired") {
-                                var SpotifyRefreshTokenPer:null|string = fs.readFileSync("Spotify/RefreshToken" + (account != null ? account : "") + ".txt", 'utf8');
-                                if (SpotifyRefreshTokenPer != null && SpotifyRefreshTokenPer != "") {
-                                    httpsRequestPromise("accounts.spotify.com","/api/token","POST",{"Content-Type":"application/x-www-form-urlencoded","Accept":"application/json"},"grant_type=refresh_token&refresh_token=" + SpotifyRefreshTokenPer + "&client_id=" + SpotifyClientID + "&client_secret=" + SpotifyClientSecret)
-                                    .then((curl:string) => {
-                                        try {
-                                            if (JSON.parse(curl)) {
-                                                var json:any = JSON.parse(curl);
-                                                if (json.error == null) {
-                                                    //set refreshed token and retry function
-                                                    fs.writeFileSync("Spotify/AccessToken" + (account != null ? account : "") + ".txt",json.access_token);
-                                                    SpotifyStatus(account).then(resolve).catch(reject);
-                                                } else {
-                                                    reject(2); console.log("SpotifyStatusJsonError1: " + json.error);
-                                                }
-                                            } else {
-                                                reject(3); console.log("SpotifyStatusJsonError2: could not parse json");
-                                            }
-                                        } catch (err:any) {
-                                            reject(4); console.log("SpotifyStatusTryCatchError1: " + err);
-                                        }
-                                    }).catch((err:Error) => {
-                                        reject(5); console.log("SpotifyStatushttpsRequestError1: " + err);
-                                    });
-                                } else {
-                                    reject(6); console.log("SpotifyStatusTokenError1: Spotify refresh token not found");
-                                }
-                            } else if (json.error.message == "Invalid access token") {
-                                reject(7); console.log("Access token is invalid, Reauthentication is required.");
-                            } else {
-                                reject(8); console.log("SpotifyStatusJsonError3: " + JSON.stringify(json.error));
-                            }
-                        } else {
-                            if (json.is_playing != null) {
-                                if (json.is_playing == true) {
-                                    if (json.item != null && json.item.name != null && json.item.artists[0].name != null) {
-                                        resolve([true, json.item.name, json.item.artists[0].name]);
-                                    } else {
-                                        resolve([true, "", ""]);
-                                    }
-                                } else {
-                                    resolve([false, "", ""]);
-                                }
-                            } else {
-                                reject(9); console.log("SpotifyStatusError1: IsPlaying == null");
-                            }
-                        }
-                    } else {
-                        reject(10); console.log("SpotifyStatusJsonError4: could not parse json");
-                    }
-                } catch (err:any) {
-                    if (err.toString() != "SyntaxError: Unexpected end of JSON input") {
-                        reject(11); console.log("SpotifyStatusTryCatchError2: " + err);
-                    }
+ * pauses spotify
+ * @date 5/26/2023
+ *
+ * @param {(string|null)} account
+ * 
+ * @example
+ * rejects with codes 1-40
+ *  
+ * codes 1, 2 and 11-18 are from the initial request
+ * codes   3-10         are from refressing the token
+ * codes  19-36         are from the request after refressing
+ * codes  37-40         are from SpotifyPause specifically
+ */ 
+function SpotifyPause       (                                        account:string|null):Promise<boolean           > {
+    return new Promise<boolean>(async( resolve:((value?:any)=>void), reject:((reason?:any)=>void) )=>{
+        SpotifyMeRequestRetry("Pause",account,"/pause","PUT",null)
+        .then ((json:any)=>{console.log("paused");console.log(json);})//nothing needed
+        .catch(async(out:[number,any])=>{
+            if (out[0]==13||out[0]==31) {
+                var [reason,err]:[number,any] = out;
+                assert(err != null);
+                if (err.message == "Device not found") {
+                    reject(37); console.log("That device is not avaliable to play music.");
+                } else if (err.reason == "NO_ACTIVE_DEVICE") {
+                    resolve(false); console.log("No device is currently playing music.");
+                } else if (err.message == "Player command failed: Restriction violated") {
+                    reject(38); console.log("SpotifyPauseError1: \"Restriction violated.\"");
+                } else if (err.status == 502) {
+                    reject(39); console.log("SpotifyPauseHttpsError2: \"Bad gateway.\"");
+                } else {
+                    reject(40); console.log("SpotifyPauseJsonError6: " + JSON.stringify(err));
                 }
-            }).catch((err:Error) => {
-                reject(12); console.log("SpotifyStatushttpsRequestError2: " + err);
-            });
-        }
+            } else if (out[0] == 2) {
+                resolve(false);
+            } else reject(out[0]);
+        });
     });
 }
 
 /**
- * Skips to the next song on account selected
- * @param [device] The device you want to skip on(optional)
- * @param [account] The keyword for the account to skip on(optional)
- * @returns none
- */
-function SpotifySkipNext(device?:string|null, account?:string|null) {
-    return new Promise<boolean>((resolve,reject) => {
-        var SpotifyAccessTokenPer:null|string = null;
-        try { SpotifyAccessTokenPer = fs.readFileSync("Spotify/AccessToken" + (account != null ? account : "") + ".txt", 'utf8');
-        } catch (err) { reject(1); console.log("SpotifySkipNextFileError1: " + err); return; }
-        if (SpotifyAccessTokenPer != null && SpotifyAccessTokenPer != "") {
-            httpsRequestPromise("api.spotify.com", "/v1/me/player/next" + ((device == null || device == "") ? "" : "?device_id=" + device),"POST",{"Accept":"application/json","Content-Type":"application/json","Authorization":"Bearer " + SpotifyAccessTokenPer},null)
-            .then((curl:string) => {
-                try {
-                    if (JSON.parse(curl) != null) {
-                        var json:any = JSON.parse(curl);
-                        if (json.error != null) {
-                            if (json.error.message == "The access token expired") {
-                                var SpotifyRefreshTokenPer:null|string = fs.readFileSync("Spotify/RefreshToken" + (account != null ? account : "") + ".txt", 'utf8');
-                                if (SpotifyRefreshTokenPer != null && SpotifyRefreshTokenPer != "") {
-                                    httpsRequestPromise("accounts.spotify.com","/api/token","POST",{"Content-Type":"application/x-www-form-urlencoded","Accept":"application/json"},"grant_type=refresh_token&refresh_token=" + SpotifyRefreshTokenPer + "&client_id=" + SpotifyClientID + "&client_secret=" + SpotifyClientSecret)
-                                    .then((curl:string) => {
-                                        try {
-                                            if (JSON.parse(curl)) {
-                                                var json:any = JSON.parse(curl);
-                                                if (json.error == null) {
-                                                    //set refreshed token and retry function
-                                                    fs.writeFileSync("Spotify/AccessToken" + (account != null ? account : "") + ".txt",json.access_token);
-                                                    SpotifySkipNext(device,account);
-                                                } else {
-                                                    reject(2); console.log("SpotifySkipNextJsonError1: " + json.error);
-                                                }
-                                            } else {
-                                                reject(3); console.log("SpotifySkipNextJsonError2: could not parse json");
-                                            }
-                                        } catch (err:any) {
-                                            reject(4);console.log("SpotifySkipNextTryCatchError1: " + err);
-                                        }
-                                    }).catch((err:Error) => {
-                                        reject(5); console.log("SpotifySkipNexthttpsRequestError1: " + err);
-                                    });
-                                } else {
-                                    reject(6); console.log("SpotifySkipNextTokenError: Spotify refresh token not found");
-                                }
-                            } else if (json.error.message == "Invalid access token") {
-                                reject(7); console.log("Access token is invalid, Reauthentication is required.");
-                            } else if (json.error.message == "Device not found") {
-                                console.log("That device is not currently playing music.");
-                                reject(8);
-                            } else if (json.error.reason == "NO_ACTIVE_DEVICE") {
-                                //find device to play on
-                                httpsRequestPromise("api.spotify.com","/v1/me/player/devices","GET",{"Accept":"application/json","Content-Type":"application/json","Authorization":"Bearer " + SpotifyAccessTokenPer},null)
-                                .then((curl:string) => {
-                                    try {
-                                        if (JSON.parse(curl)) {
-                                            var json:any = JSON.parse(curl);
-                                            if (json.error != null) {
-                                                if (json.error.message == "The access token expired") {
-                                                    reject(9); console.log("SpotifySkipNextError: Spotify refresh token expired");
-                                                } else if (json.error.message == "Invalid access token") {
-                                                    reject(10); console.log("Access token is invalid, Reauthentication is required.");
-                                                } else {
-                                                    reject(11); console.log("SpotifySkipNextJsonError3: " + JSON.stringify(json.error));
-                                                }
-                                            } else {
-                                                //play on first device
-                                                var list:Array<any> = json.devices.filter((item:any)=>item.name!="32\" TCL Roku TV");
-                                                if (list.length > 0) {
-                                                    console.log("Force playing on " + list[0].name);
-                                                    SpotifySkipNext(list[0].id,account);
-                                                } else {
-                                                    resolve(false); console.log("No device is currently playing music.");
-                                                }
-                                            }
-                                        } else {
-                                            reject(12); console.log("SpotifySkipNextJsonError4: could not parse json");
-                                        }
-                                    } catch (err:any) {
-                                        reject(13); console.log("SpotifySkipNextTryCatchError2: " + err)
-                                    }
-                                }).catch((err:Error) => {
-                                    reject(14); console.log("SpotifySkipNexthttpsRequestError2: " + err);
-                                });
-                            } else if (json.error.message == "Player command failed: Restriction violated") {
-                                console.log("No clue. ln454 Spotify.js");
-                                resolve(true);
-                            } else {
-                                reject(15); console.log("SpotifySkipNextJsonError5: " + JSON.stringify(json.error));
-                            }
-                        }
-                    } else {
-                        reject(16); console.log("SpotifySkipNextJsonError6: could not parse json");
-                    }
-                } catch (err:any) {
-                    if (err.toString() != "SyntaxError: Unexpected end of JSON input") {
-                        reject(17); console.log("SpotifySkipNextTryCatchError3: " + err);
-                    } else {
-                        //success
-                        resolve(true);
-                    }
+ * toggles spotify on/off
+ * @date 5/26/2023
+ *  
+ * @param {(string|null)} device
+ * @param {(string|null)} account
+ *  
+ * @example
+ * rejects with codes 1-269
+ *  
+ * codes 1, 2 and 11-18 are from the initial request
+ * codes   3-10         are from refressing the token
+ * codes  19-36         are from the request after refressing
+ * code     37           is from SpotifyToggle specifically
+ * codes  38-74         are from SpotifyPause
+ * codes  75-269        are from SpotifyPlay
+ */ 
+function SpotifyToggle      (                    device:string|null, account:string|null):Promise<boolean           > {
+    return new Promise<boolean>(async( resolve:((value?:any)=>void), reject:((reason?:any)=>void) )=>{
+        SpotifyMeRequestRetry("Toggle",account,"","GET",null)
+        .then (async(json:any)=>{
+            if (json.is_playing != null) {
+                if (json.is_playing == true) {
+                    SpotifyPause(account).then((val:boolean) => {
+                        resolve(val);
+                    }).catch((reason:number)=>{ reject(reason+37); });//maps errors 1-40 into 38-74
+                } else {
+                    SpotifyPlay(null,device,account).then((val:boolean) => {
+                        resolve(val);
+                    }).catch((reason:number)=>{ reject(reason+74); });//maps errors 1-195 into 75-269
                 }
-            }).catch((err:Error) => {
-                reject(18); console.log("SpotifySkipNexthttpsRequestError3: " + err);
-            });
-        }
+            } else {
+                reject(37); console.log("SpotifyToggleError1: IsPlaying == null");
+            }
+        })
+        .catch((out:[number,any])=>reject(out[0]));
     });
 }
 
 /**
- * Skips to the previous song on account selected
- * @param [device] the device you want to skip on(optional)
- * @param [account] the keyword for the account to skip on(optional)
- * @returns none
- */
-function SpotifySkipPrevious(device?:string|null, account?:string|null) {
-    return new Promise<boolean>((resolve,reject) => {
-        var SpotifyAccessTokenPer:null|string = null;
-        try { SpotifyAccessTokenPer = fs.readFileSync("Spotify/AccessToken" + (account != null ? account : "") + ".txt", 'utf8');
-        } catch (err) { reject(1); console.log("SpotifySkipPreviousFileError1: " + err); return; }
-        if (SpotifyAccessTokenPer != null && SpotifyAccessTokenPer != "") {
-            httpsRequestPromise("api.spotify.com", "/v1/me/player/previous" + ((device == null || device == "") ? "" : "?device_id=" + device),"POST",{"Accept":"application/json","Content-Type":"application/json","Authorization":"Bearer " + SpotifyAccessTokenPer},null)
-            .then((curl:string) => {
-                try {
-                    if (JSON.parse(curl) != null) {
-                        var json:any = JSON.parse(curl);
-                        if (json.error != null) {
-                            if (json.error.message == "The access token expired") {
-                                var SpotifyRefreshTokenPer:null|string = fs.readFileSync("Spotify/RefreshToken" + (account != null ? account : "") + ".txt", 'utf8');
-                                if (SpotifyRefreshTokenPer != null && SpotifyRefreshTokenPer != "") {
-                                    httpsRequestPromise("accounts.spotify.com","/api/token","POST",{"Content-Type":"application/x-www-form-urlencoded","Accept":"application/json"},"grant_type=refresh_token&refresh_token=" + SpotifyRefreshTokenPer + "&client_id=" + SpotifyClientID + "&client_secret=" + SpotifyClientSecret)
-                                    .then((curl:string) => {
-                                        try {
-                                            if (JSON.parse(curl)) {
-                                                var json:any = JSON.parse(curl);
-                                                if (json.error == null) {
-                                                    //set refreshed token and retry function
-                                                    fs.writeFileSync("Spotify/AccessToken" + (account != null ? account : "") + ".txt",json.access_token);
-                                                    SpotifySkipPrevious(device,account);
-                                                } else {
-                                                    reject(2); console.log("SpotifySkipPreviousJsonError1: " + json.error);
-                                                }
-                                            } else {
-                                                reject(3); console.log("SpotifySkipPreviousJsonError2: could not parse json");
-                                            }
-                                        } catch (err:any) {
-                                            reject(4);console.log("SpotifySkipPreviousTryCatchError1: " + err);
-                                        }
-                                    }).catch((err:Error) => {
-                                        reject(5); console.log("SpotifySkipPrevioushttpsRequestError1: " + err);
-                                    });
-                                } else {
-                                    reject(6); console.log("SpotifySkipPreviousTokenError: Spotify refresh token not found");
-                                }
-                            } else if (json.error.message == "Invalid access token") {
-                                reject(7); console.log("Access token is invalid, Reauthentication is required.");
-                            } else if (json.error.message == "Device not found") {
-                                console.log("That device is not currently playing music.");
-                                reject(8);
-                            } else if (json.error.reason == "NO_ACTIVE_DEVICE") {
-                                //find device to play on
-                                httpsRequestPromise("api.spotify.com","/v1/me/player/devices","GET",{"Accept":"application/json","Content-Type":"application/json","Authorization":"Bearer " + SpotifyAccessTokenPer},null)
-                                .then((curl:string) => {
-                                    try {
-                                        if (JSON.parse(curl)) {
-                                            var json:any = JSON.parse(curl);
-                                            if (json.error != null) {
-                                                if (json.error.message == "The access token expired") {
-                                                    reject(9); console.log("SpotifySkipPreviousError: Spotify refresh token expired");
-                                                } else if (json.error.message == "Invalid access token") {
-                                                    reject(10); console.log("Access token is invalid, Reauthentication is required.");
-                                                } else {
-                                                    reject(11); console.log("SpotifySkipPreviousJsonError3: " + JSON.stringify(json.error));
-                                                }
-                                            } else {
-                                                //play on first device
-                                                var list:Array<any> = json.devices.filter((item:any)=>item.name!="32\" TCL Roku TV");
-                                                if (list.length > 0) {
-                                                    console.log("Force playing on " + list[0].name);
-                                                    SpotifySkipPrevious(list[0].id,account);
-                                                } else {
-                                                    resolve(false); console.log("No device is currently playing music.");
-                                                }
-                                            }
-                                        } else {
-                                            reject(12); console.log("SpotifySkipPreviousJsonError4: could not parse json");
-                                        }
-                                    } catch (err:any) {
-                                        reject(13); console.log("SpotifySkipPreviousTryCatchError2: " + err)
-                                    }
-                                }).catch((err:Error) => {
-                                    reject(14); console.log("SpotifySkipPrevioushttpsRequestError2: " + err);
-                                });
-                            } else if (json.error.message == "Player command failed: Restriction violated") {
-                                console.log("No clue. ln454 Spotify.js");
-                                resolve(true);
-                            } else {
-                                reject(15); console.log("SpotifySkipPreviousJsonError5: " + JSON.stringify(json.error));
-                            }
-                        }
-                    } else {
-                        reject(16); console.log("SpotifySkipPreviousJsonError6: could not parse json");
-                    }
-                } catch (err:any) {
-                    if (err.toString() != "SyntaxError: Unexpected end of JSON input") {
-                        reject(17); console.log("SpotifySkipPreviousTryCatchError3: " + err);
-                    } else {
-                        //success
-                        resolve(true);
-                    }
+ * gets status of spotify playback
+ * @date 5/26/2023
+ *  
+ * @param {(string|null)} account
+ *  
+ * @example
+ * rejects with codes 1-37
+ *  
+ * codes 1, 2 and 11-18 are from the initial request
+ * codes   3-10         are from refressing the token
+ * codes  19-36         are from the request after refressing
+ * code     37           is from SpotifyStatus specifically
+ */ 
+function SpotifyStatus      (                                        account:string|null):Promise<[boolean,string[]]> {
+    return new Promise<[boolean,string[]]>(async( resolve:((value?:any)=>void), reject:((reason?:any)=>void) )=>{
+        SpotifyMeRequestRetry("Status",account,"","GET",null)
+        .then (async(json:any)=>{
+            if (json.is_playing == null) { reject(37); console.log("SpotifyStatusError1: IsPlaying == null"); return; }
+            if (json.is_playing == true) {
+                if (json.item != null && json.item.name != null && json.item.artists[0].name != null) {
+                    resolve([true, [json.item.name, ...(json.item.artists.map((artist:any)=>artist.name))]]);
+                } else {
+                    resolve([true, ["", ""]]);
                 }
-            }).catch((err:Error) => {
-                reject(18); console.log("SpotifySkipPrevioushttpsRequestError3: " + err);
-            });
-        }
+            } else {
+                resolve([false, ["", ""]]);
+            }
+        })
+        .catch((out:[number,any])=>reject(out[0]));
     });
 }
+
+/**
+ * skips to next song
+ * @date 5/26/2023
+ *  
+ * @param {(string|null)} device
+ * @param {(string|null)} account
+ *  
+ * @example
+ * rejects with codes 1-158
+ *  
+ * codes 1, 2 and 11-18 are from the initial request
+ * codes   3-10         are from refressing the token
+ * codes  19-36         are from the request after refressing
+ * codes  38-40         are from SpotifyStatus specifically
+ * codes  41-79         are from getting the devices on account if no device is found
+ * codes  80-158        are from trying to skip again after chosing an avaliable device
+ */ 
+function SpotifySkipNext    (                    device:string|null, account:string|null):Promise<boolean           > {
+    return new Promise<boolean>(async( resolve:((value?:any)=>void), reject:((reason?:any)=>void) )=>{
+        SpotifyMeRequestRetry("SkipNext",account,"/next"+((device==null||device=="")?"": "?device_id="+device ),"POST",null)
+        .then(()=>{console.log();})//nothing needed
+        .catch(async(out:[number,any])=>{
+            if (out[0]==13||out[0]==31) {
+                var [reason,err]:[number,any] = out;
+                assert(err != null);
+                if (err.message == "Device not found") {
+                    reject(37); console.log("That device is not avaliable to play music.");
+                } else if (err.reason == "NO_ACTIVE_DEVICE") {
+                    getSpotifyDevices("SkipNext",account)//find device to play on
+                    .then(async(list:any)=>{
+                        if (list.length > 0) {
+                            console.log("Force playing on " + list[0].name);
+                            SpotifySkipNext(list[0].id,account).then(resolve)
+                            .catch((out:[number,any])=>{reject(out[0]+79)});//maps errors 1-79 into 80-158
+                        } else { console.log("No device is avaliable to play music."); }
+                    })
+                    .catch((out:[number,any])=>{reject(out[0]+40)});//maps errors 1-39 into 41-79
+                } else if (err.message == "Player command failed: Restriction violated") {
+                    reject(38); console.log("No clue. ln454 Spotify.js");
+                } else if (err.status == 502) {
+                    reject(39); console.log("SpotifySkipNextHttpsError3: \"Bad gateway.\"");
+                } else {
+                    reject(40); console.log("SpotifySkipNextJsonError7: " + JSON.stringify(err));
+                }
+            } else if (out[0] == 2) {
+                resolve(true);
+            } else reject(out[0]);
+        });
+    });
+}
+
+/**
+ * skips to previous song
+ * @date 5/26/2023
+ *  
+ * @param {(string|null)} device
+ * @param {(string|null)} account
+ *  
+ * @example
+ * rejects with codes 1-158
+ *  
+ * codes 1, 2 and 11-18 are from the initial request
+ * codes   3-10         are from refressing the token
+ * codes  19-36         are from the request after refressing
+ * codes  38-40         are from SpotifyStatus specifically
+ * codes  41-79         are from getting the devices on account if no device is found
+ * codes  80-158        are from trying to skip again after chosing an avaliable device
+ */ 
+function SpotifySkipPrevious(                    device:string|null, account:string|null):Promise<boolean           > {
+    return new Promise<boolean>(async( resolve:((value?:any)=>void), reject:((reason?:any)=>void) )=>{
+        SpotifyMeRequestRetry("SkipPrevious",account,"/previous"+((device==null||device==null||device=="")?"": "?device_id="+device ),"POST",null)
+        .then(()=>{console.log();})//nothing needed
+        .catch(async(out:[number,any])=>{
+            if (out[0]==13||out[0]==31) {
+                var [reason,err]:[number,any] = out;
+                assert(err != null);
+                if (err.message == "Device not found") {
+                    reject(37); console.log("That device is not avaliable to play music.");
+                } else if (err.reason == "NO_ACTIVE_DEVICE") {
+                    getSpotifyDevices("SkipPrevious",account)//find device to play on
+                    .then(async(list:any)=>{
+                        if (list.length > 0) {
+                            console.log("Force playing on " + list[0].name);
+                            SpotifySkipPrevious(list[0].id,account).then(resolve)
+                            .catch((out:[number,any])=>{reject(out[0]+79)});//maps errors 1-79 into 80-158
+                        } else { console.log("No device is avaliable to play music."); }
+                    })
+                    .catch((out:[number,any])=>{reject(out[0]+40)});//maps errors 1-39 into 41-79
+                } else if (err.message == "Player command failed: Restriction violated") {
+                    reject(38); console.log("No clue. ln454 Spotify.js");
+                } else if (err.status == 502) {
+                    reject(39); console.log("SpotifySkipPreviousHttpsError4: \"Bad gateway.\"");
+                } else {
+                    reject(40); console.log("SpotifySkipPreviousJsonError8: " + JSON.stringify(err));
+                }
+            } else if (out[0] == 2) {
+                resolve(true);
+            } else reject(out[0]);
+        });
+    });
+}
+
+/**
+ * raises volume
+ * @date 5/26/2023
+ *  
+ * @param {(number|null)} amount
+ * @param {(string|null)} device
+ * @param {(string|null)} account
+ *  
+ * @example
+ * rejects with codes 1-74
+ *  
+ * codes 1, 2 and 11-18 are from the first request
+ * codes   3-10         are from refressing the token
+ * codes  19-36         are from the request after refressing
+ * code   37-38         are from SpotifyVolumeUp specifically
+ * code   39-74         are from "/volume" request
+ */ 
+function SpotifyVolumeUp    (amount:number|null, device:string|null, account:string|null):Promise<boolean           > {
+    return new Promise<boolean>(async( resolve:((value?:any)=>void), reject:((reason?:any)=>void) )=>{
+        SpotifyMeRequestRetry("VolumeUp",account,"","GET",null)
+        .then(async(json:any)=>{
+            if (json.device                == null) { reject(37); console.log("SpotifyVolumeUpError1: device                == null"); return; }
+            if (json.device.volume_percent == null) { reject(38); console.log("SpotifyVolumeUpError2: device.volume_percent == null"); return; }
+            SpotifyMeRequestRetry("VolumeUp",account,"/volume?volume_percent="+(Math.min(100,json.device.volume_percent+(amount||10)))+((device==null||device=="")?"": "&device_id="+device ),"PUT",null)
+            .then ((json:any)=>{
+                console.log("SpotifyVolumeUp");
+                console.log(json);
+                resolve(true);
+            })
+            .catch((out:[number,any])=>{
+                if (out[0] == 2) {
+                    resolve(true);
+                } else reject(out[0]+38);//maps errors 1-36 into 39-74
+            });
+        }).catch((out:[number,any])=>reject(out[0]));
+    });
+}
+
+/**
+ * lowers volume
+ * @date 5/26/2023
+ *  
+ * @param {(number|null)} amount
+ * @param {(string|null)} device
+ * @param {(string|null)} account
+ *  
+ * @example
+ * rejects with codes 1-74
+ *  
+ * codes 1, 2 and 11-18 are from the first request
+ * codes   3-10         are from refressing the token
+ * codes  19-36         are from the request after refressing
+ * code   37-38         are from SpotifyVolumeUp specifically
+ * code   39-74         are from "/volume" request
+ */ 
+function SpotifyVolumeDown  (amount:number|null, device:string|null, account:string|null):Promise<boolean           > {
+    return new Promise<boolean>(async( resolve:((value?:any)=>void), reject:((reason?:any)=>void) )=>{
+        SpotifyMeRequestRetry("VolumeDown",account,"","GET",null)
+        .then(async(json:any)=>{
+            if (json.device                == null) { reject(37); console.log("SpotifyVolumeDownError1: device == null"               ); return; }
+            if (json.device.volume_percent == null) { reject(38); console.log("SpotifyVolumeDownError2: device.volume_percent == null"); return; }
+            SpotifyMeRequestRetry("VolumeDown",account,"/volume?volume_percent="+(Math.max(0,json.device.volume_percent-(amount||10)))+((device==null||device=="")?"": "&device_id="+device ),"PUT",null)
+            .then ((json:any)=>{
+                console.log("SpotifyVolumeDown");
+                console.log(json);
+                resolve(true);
+            })
+            .catch((out:[number,any])=>{
+                if (out[0] == 2) {
+                    resolve(true);
+                } else reject(out[0]+38);//maps errors 1-36 into 39-74
+            });
+        }).catch((out:[number,any])=>reject(out[0]));
+    });
+}
+
+/**
+ * set volume
+ * @date 5/27/2023
+ *  
+ * @param {(number)}      volume
+ * @param {(string|null)} device
+ * @param {(string|null)} account
+ *  
+ * @example
+ * rejects with codes 1-36
+ *  
+ * codes 1 and 11-18 are from the first request
+ * codes   3-10      are from refressing the token
+ * codes  19-36      are from the request after refressing
+ */ 
+function SpotifySetVolume   (volume:number,      device:string|null, account:string|null):Promise<boolean           > {
+    return new Promise<boolean>(async( resolve:((value?:any)=>void), reject:((reason?:any)=>void) )=>{
+        SpotifyMeRequestRetry("SetVolume",account,"/volume?volume_percent="+(Math.min(100,Math.max(0,volume)))+((device==null||device=="")?"": "&device_id="+device ),"PUT",null)
+        .then ((json:any)=>{
+            console.log("SpotifySetVolume");
+            console.log(json);
+            resolve(true);
+        })
+        .catch((out:[number,any])=>{
+            if (out[0] == 2) {
+                resolve(true);
+            } else reject(out[0]);
+        });
+    });
+}
+
 var Spotify = {
     SpotifyClientID,
     SpotifyClientSecret,
     Link,
-    GetSpotifyToken,
+    SpotifyGetToken,
+    getSpotifyDevices,
+
     SpotifyPlay,
     SpotifyPause,
     SpotifyToggle,
     SpotifyStatus,
     SpotifySkipNext,
-    SpotifySkipPrevious
+    SpotifySkipPrevious,
+    SpotifyVolumeUp,
+    SpotifyVolumeDown,
+    SpotifySetVolume,
 }
 export {Spotify};
