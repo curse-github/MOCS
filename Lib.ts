@@ -122,13 +122,13 @@ export function cloneObject(thing:Array<any>|{[key:string|number]:any}|any): Arr
  * @interface Func */
 export interface Func{
     name:string
-    parameters:Array<{//parameter
+    parameters:{//parameter
         name:string
         type:string
         nullable?:boolean
         public?:boolean
         defaultValue?:string
-    }>
+    }[]
     public?:boolean
 }
 /** Interface used the represent a Device.

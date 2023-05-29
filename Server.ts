@@ -112,14 +112,14 @@ ws.on('connection', (websocket:any) => {
                                     connected = true;
 
                                     if (msg.data.name.toLowerCase() == "nanopi") {
-                                        handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"nanopi\",\"function\":\"Subscribe\",\"parameters\":[1,\"self.spotify\",\"skipprevious\",\"\\\"Test\\\"\"]}}");
-                                        handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"nanopi\",\"function\":\"Subscribe\",\"parameters\":[2,\"self.spotify\",\"toggle\",\"\\\"Test\\\"\"]}}");
-                                        handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"nanopi\",\"function\":\"Subscribe\",\"parameters\":[3,\"self.spotify\",\"skipnext\",\"\\\"Test\\\"\"]}}");
+                                        handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"nanopi\",\"function\":\"Subscribe\",\"parameters\":[1,\"self.spotify\",\"skipprevious\",\"\\\""+Spotify.defaultAccount+"\\\"\"]}}");
+                                        handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"nanopi\",\"function\":\"Subscribe\",\"parameters\":[2,\"self.spotify\",\"toggle\",\"\\\""+Spotify.defaultAccount+"\\\"\"]}}");
+                                        handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"nanopi\",\"function\":\"Subscribe\",\"parameters\":[3,\"self.spotify\",\"skipnext\",\"\\\""+Spotify.defaultAccount+"\\\"\"]}}");
                                     }
                                     if (msg.data.name.toLowerCase() == "controller") {
-                                        handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"controller\",\"function\":\"Subscribe\",\"parameters\":[7,\"self.spotify\",\"skipprevious\",\"\\\"Test\\\"\"]}}");
-                                        handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"controller\",\"function\":\"Subscribe\",\"parameters\":[6,\"self.spotify\",\"toggle\",\"\\\"Test\\\"\"]}}");
-                                        handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"controller\",\"function\":\"Subscribe\",\"parameters\":[5,\"self.spotify\",\"skipnext\",\"\\\"Test\\\"\"]}}");
+                                        handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"controller\",\"function\":\"Subscribe\",\"parameters\":[7,\"self.spotify\",\"skipprevious\",\"\\\""+Spotify.defaultAccount+"\\\"\"]}}");
+                                        handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"controller\",\"function\":\"Subscribe\",\"parameters\":[6,\"self.spotify\",\"toggle\",\"\\\""+Spotify.defaultAccount+"\\\"\"]}}");
+                                        handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"controller\",\"function\":\"Subscribe\",\"parameters\":[5,\"self.spotify\",\"skipnext\",\"\\\""+Spotify.defaultAccount+"\\\"\"]}}");
                                     }
                                     if (connectionSubscriptions[msg.data.name.toLowerCase()] != null && (typeof connectionSubscriptions[msg.data.name.toLowerCase()]) == "object" && Array.isArray(connectionSubscriptions[msg.data.name.toLowerCase()])) {
                                         for(var i:number = 0; i < connectionSubscriptions[msg.data.name.toLowerCase()].length; i++) {
@@ -305,7 +305,7 @@ function handleCommand(msg:string|command, websocket?:any) {
             } else { console.log(nm + "    ln335") }
         } else {
             var lst:Array<boolean|string|{[key:string]:string}> = findFunction(devices,msg.data);
-            var websocket:any
+            var websocket:any;
             var message:string;
             websocket = lst[0];
             if (websockets[websocket] != null && websocket != false) {
@@ -319,32 +319,36 @@ function handleCommand(msg:string|command, websocket?:any) {
             }
         }
     }
-    
 }
 function findFunction(list:{[key:string]:Device|null},data:cmdData,type?:number) : Array<boolean|string|{[key:string]:string}>{
     if (list != null && (typeof list) == "object" && !Array.isArray(list) && data != null) {
-        var splt:Array<string> = data.device.split(".");
-        var len:number = splt.length;
-        if (len == 0){ console.log("input err    ln356"); return [false]; }
-        else if (len == 1) {
+        var deviceName:string = data.device;
+        if (!data.device.includes(".")) {
             // if there is only one level deep, find it and its function, and call it
-            let splt0:string = splt[0].toLowerCase();
-            data.function = data.function.toLowerCase();
-            if ((list[splt0] != null && Object.keys(list[splt0]!.functions).length > 0) && (list[splt0]!.functions[data.function] != null && websockets[splt0] != null)) {
+            const device:Device = list[deviceName.toLowerCase()]!;
+            data.function    = data.function.toLowerCase();
+            if ((device != null && Object.keys(device.functions).length > 0) && (device.functions[data.function] != null && websockets[deviceName.toLowerCase()] != null)) {
+                const funcParams:{//parameter
+                    name:string
+                    type:string
+                    nullable?:boolean
+                    public?:boolean
+                    defaultValue?:string
+                }[] = device.functions[data.function]!.parameters;
                 var condition:boolean = true;
-                for (var i:number = 0; i < list[splt0]!.functions[data.function].parameters.length; i++) {
+                for (var i:number = 0; i <funcParams.length; i++) {
                     // check that parameter type matches expected type
                     if (data.parameters[i] == null || data.parameters[i] == "null") {
-                        if (list[splt0]!.functions[data.function].parameters[i].nullable == true || list[splt0]!.functions[data.function].parameters[i].nullable == true) {
+                        if (funcParams[i].nullable == true || funcParams[i].nullable == true) {
                             if (data.parameters[i] == "null") { data.parameters[i] = null; }
                             continue;
                         } else { condition = false; break; } // invalid
                     } else if ((typeof data.parameters[i]) == "number" || (typeof data.parameters[i]) == "bigint") {
-                        if (list[splt0]!.functions[data.function].parameters[i].type == "number") { continue;
+                        if (funcParams[i].type == "number") { continue;
                         } else { condition = false; break; } // invalid
                     } else if ((typeof data.parameters[i]) == "string") {
-                        if (list[splt0]!.functions[data.function].parameters[i].type == "string") { continue;
-                        } else if (list[splt0]!.functions[data.function].parameters[i].type == "bool" || list[splt0]!.functions[data.function].parameters[i].type == "boolean") {
+                        if (funcParams[i].type == "string") { continue;
+                        } else if (funcParams[i].type == "bool" || funcParams[i].type == "boolean") {
                             //if the type is string but it expected boolean check id its the string "true" or "false".
                             if (data.parameters[i].toLowerCase() == "true") {
                                 data.parameters[i] = true; continue;
@@ -353,7 +357,7 @@ function findFunction(list:{[key:string]:Device|null},data:cmdData,type?:number)
                             } else { condition = false; break; } // invalid
                         } else { condition = false; break; } // invalid
                     } else if ((typeof data.parameters[i]) == "boolean") {
-                        if (list[splt0]!.functions[data.function].parameters[i].type == "bool" || list[splt0]!.functions[data.function].parameters[i].type == "boolean") { continue;
+                        if (funcParams[i].type == "bool" || funcParams[i].type == "boolean") { continue;
                         } else { condition = false; break; } // invalid
                     }
                 }
@@ -361,22 +365,23 @@ function findFunction(list:{[key:string]:Device|null},data:cmdData,type?:number)
                     if (type == 2) {
                         return [{ "type" : "command", "data" : data.function + "()", "parameters" : JSON.stringify(data.parameters) }];
                     } else if (type == null || type == 1) {
-                        return [splt[0], "{\"type\":\"command\",\"data\":\"" + data.function + "()\", \"parameters\":" + JSON.stringify(data.parameters) + "}"];
+                        return [deviceName, "{\"type\":\"command\",\"data\":\"" + data.function + "()\", \"parameters\":" + JSON.stringify(data.parameters) + "}"];
                     }
                 } else { console.log("function parameters to not match"); return [false]; }// invalid command
             } else {
-                if (list[splt0] == null) {
+                if (device == null) {
                     console.log("device not found");
-                } else if (Object.keys(list[splt0]!.functions).length <= 0) {
+                } else if (Object.keys(device.functions).length <= 0) {
                     console.log("device does not contain functions");
-                } else if (list[splt0]!.functions[data.function] == null) {
+                } else if (device.functions[data.function] == null) {
                     console.log("function not found in device");
                 }
                 return [false];
             }// invalid command
         } else {
             // if there is more than one call the function recursively untill it finds the data it was looking for, returning the first it finds
-            var shift:string|undefined = splt.shift();
+            var deviceSplt:Array<string> = deviceName.split(".");
+            var shift:string|undefined = deviceSplt.shift();
             if (shift != undefined && list[shift] != null && Object.keys(list[shift]!.devices!).length > 0 && websockets[shift] != null) {
                 if (type == 2) {
                     var message:boolean|string|Object|any = findFunction(list[shift]!.devices!, {device:shift,function:data.function,parameters:data.parameters}, 2)[0];
