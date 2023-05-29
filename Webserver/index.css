@@ -9,7 +9,7 @@
 	transform-origin:top;
 	overflow:hidden;
 	box-sizing: border-box;
-	--maxHeight:400px
+	--maxHeight:100%;
 }
 @-webkit-keyframes collapse {
 	0% {max-height:var(--maxHeight); opacity: 100%;}

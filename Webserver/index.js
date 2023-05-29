@@ -152,8 +152,7 @@ function processDevice(parent,device,deviceName, tabs, startDeleted) {
 			if (j != null && j[1] != null && j[1].public != false) {
 				i = j[1];
 				var deviceP = append(collapseDiv,"p","",{
-					class:"my-1",
-					style:"margin-left: " + (tabSize * (tabs + 1))
+					class:"my-1"
 				});
 				var onclick = 'send("{\\\"type\\\":\\\"command\\\",\\\"data\\\":{\\\"device\\\":\\\"' + deviceName + "\\\",\\\"function\\\":\\\"" + i.name + '\\\",\\\"parameters\\\":[';
 				if (i.parameters != null && i.parameters.length > 0) {
