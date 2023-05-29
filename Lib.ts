@@ -29,7 +29,7 @@ const https = require("https");
  * @param headers An object of headers.
  * @param data Data to send if method is post.
  * @returns A Promise which will return the data returned from the request. */
-export function httpsRequestPromise(link:string,path:string,method:string,headers:{[key:string]:string},data:null|string) {
+export function httpsRequestPromise(link:string,path:string,method:string,headers:{[key:string]:string},data:null|string):Promise<string> {
     return new Promise<string>((resolve,reject) => {
         try {
             var curl:string = "";
@@ -45,13 +45,39 @@ export function httpsRequestPromise(link:string,path:string,method:string,header
                 "headers": headers
             };
             var req = https.request(options, (res:any) => {
-                //res.statusCode
                 res.setEncoding('utf8');
                 res.on("data", (chunk:string) => { curl += chunk; });
                 res.on("close", () => { resolve(curl); });
             });
             req.on("error", (err:Error) => { reject(err); });
             if (data != null) { req.write(data); }
+            req.end();
+        } catch (err:any) { reject(err); }
+    });
+}
+
+/** Requests from a https server data in the form of a buffer
+ * @param link Link to the server to request from.
+ * @param path Filepath of the file you are accessing from the server.
+ * @param headers An object of headers.
+ * @returns A Promise which will return the Buffer object returned from the request.
+ */
+export function httpsRequestGetBufferPromise(link:string,path:string,headers:{[key:string]:string}):Promise<Buffer> {
+    return new Promise<Buffer>((resolve,reject) => {
+        try {
+            var curl:Buffer[] = [];
+            var options = {
+                "host": link,
+                "port": 443,
+                "path": path,
+                "method": "GET",
+                "headers": headers
+            };
+            var req = https.request(options, (res:any) => {
+                res.on("data", (chunk:any) => { curl.push(Buffer.from(chunk)); });
+                res.on("close", () => { resolve(Buffer.concat(curl)); });
+            });
+            req.on("error", (err:Error) => { reject(err); });
             req.end();
         } catch (err:any) { reject(err); }
     });

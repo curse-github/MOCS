@@ -1,10 +1,10 @@
 const fs:any = require("fs");
-import {assert, httpsRequestPromise} from "./Lib";
+import {assert, httpsRequestPromise, httpsRequestGetBufferPromise} from "./Lib";
 const SpotifyClientID    :string = fs.readFileSync(__dirname+"/Spotify/ClientID.txt"    , 'utf8');
 const SpotifyClientSecret:string = fs.readFileSync(__dirname+"/Spotify/ClientSecret.txt", 'utf8');
 const redirectLink       :string = fs.readFileSync(__dirname+"/Spotify/Redirect.txt"    , 'utf8');
 const Link               :string = "https://accounts.spotify.com/authorize?client_id=" + SpotifyClientID + "&response_type=code&redirect_uri=" + redirectLink + "&scope=user-modify-playback-state user-read-playback-position user-read-currently-playing user-read-recently-played user-read-playback-state";
-
+const defaultAccount     :string = "Crs"
 //#region library
 function SpotifyGetToken(code:string) {
     httpsRequestPromise("accounts.spotify.com","/api/token","POST",{"Content-Type":"application/x-www-form-urlencoded","Accept":"application/json"},"grant_type=authorization_code&code=" + code + "&redirect_uri=" + redirectLink + "&client_id=" + SpotifyClientID + "&client_secret=" + SpotifyClientSecret)
@@ -16,8 +16,8 @@ function SpotifyGetToken(code:string) {
                 if (json.error != null) {
                     console.log("SpotifyGetTokenError1: " + JSON.stringify(json.error)); return;
                 } else {
-                    fs.writeFileSync(__dirname+"/Spotify/AccessToken"  + "Test" + ".txt",json.access_token)
-                    fs.writeFileSync(__dirname+"/Spotify/RefreshToken" + "Test" + ".txt",json.refresh_token)
+                    fs.writeFileSync(__dirname+"/Spotify/AccessToken"  + defaultAccount + ".txt",json.access_token)
+                    fs.writeFileSync(__dirname+"/Spotify/RefreshToken" + defaultAccount + ".txt",json.refresh_token)
                 }
             }
         } catch (err:any) { console.log("SpotifyGetTokenError2: " + err); return; }
@@ -31,7 +31,7 @@ function SpotifyGetToken(code:string) {
 function SpotifyTokenRequest  (functionName:string,account?:string|null) {
     return new Promise<[boolean,string,string]>(async( resolve:((value?:any)=>void), reject:((reason?:any)=>void) )=>{
         var SpotifyRefreshTokenTmp:null|string = null;
-        try { SpotifyRefreshTokenTmp = fs.readFileSync(__dirname+"/Spotify/RefreshToken" + (account||"") + ".txt", 'utf8');
+        try { SpotifyRefreshTokenTmp = fs.readFileSync(__dirname+"/Spotify/RefreshToken" + (account||defaultAccount) + ".txt", 'utf8');
         } catch (err) { reject(1); console.log("Spotify"+functionName+"FileError1: " + err); return; }
 
         if (SpotifyRefreshTokenTmp != null && SpotifyRefreshTokenTmp != "") {
@@ -44,7 +44,7 @@ function SpotifyTokenRequest  (functionName:string,account?:string|null) {
                         if (json.error == null) {
                             //set refreshed token and retry function
                             try {
-                                fs.writeFileSync("Spotify/AccessToken" + (account||"") + ".txt",json.access_token);
+                                fs.writeFileSync("Spotify/AccessToken" + (account||defaultAccount) + ".txt",json.access_token);
                                 resolve();
                             } catch (err:any) {
                                 reject(3); //console.log("Spotify"+functionName+"TryCatchError1: " + err);
@@ -85,7 +85,7 @@ function SpotifyTokenRequest  (functionName:string,account?:string|null) {
 function SpotifyMeRequest     (functionName:string, account:string|null, path:string, method:"GET"|"POST"|"PUT", data:string|null, refresh:boolean=false, onrefresh?:(()=>void)):Promise<any> {
     return new Promise<any>(async( resolve:((value?:any)=>void), reject:((reason?:any)=>void) )=>{
         var SpotifyAccessTokenTmp:null|string = null;
-        try { SpotifyAccessTokenTmp = fs.readFileSync(__dirname+"/Spotify/AccessToken" + (account||"") + ".txt", 'utf8');
+        try { SpotifyAccessTokenTmp = fs.readFileSync(__dirname+"/Spotify/AccessToken" + (account||defaultAccount) + ".txt", 'utf8');
         } catch (err) { reject([1]); console.log("Spotify"+functionName+"FileError2: " + err); return; }//error code 1  or error code 19
 
         httpsRequestPromise("api.spotify.com","/v1/me/player"+path,method,{"Accept":"application/json","Content-Type":"application/json","Authorization":"Bearer " + SpotifyAccessTokenTmp},data)
@@ -148,7 +148,7 @@ function SpotifyMeRequest     (functionName:string, account:string|null, path:st
  * @example
  * rejects with codes 1-36
  * 
- * codes 1, 2 and 11-18 are from the initial request
+ * codes 1 and 11-18 are from the initial request
  * codes   3-10         are from refressing the token
  * codes  19-36         are from the request after refressing
  * 
@@ -217,15 +217,20 @@ function getSpotifyDevices  (functionName:string,                    account:str
  */ 
 function SpotifyPlay        (link  :string|null, device:string|null, account:string|null):Promise<boolean           > {
     return new Promise<boolean>(async( resolve:((value?:any)=>void), reject:((reason?:any)=>void) )=>{
-        var linkTmp:string|null = link;
+        var data:string = "";
         if (link != null) {
-            if (link.includes("open.spotify.com/") && (link.includes("playlist") || link.includes("album") || link.includes("show") || link.includes("track") || link.includes("artist") || link.includes("episode"))) {
-                linkTmp = link;                         linkTmp = linkTmp.replace("https://","" )   ;
-                linkTmp = linkTmp.replace("open.","" ); linkTmp = linkTmp.replace(".com/"   ,":")   ;
-                linkTmp = linkTmp.replace("/"    ,":"); linkTmp = linkTmp.split  ("?"           )[0];
+            if (link.includes("open.spotify.com/") && (link.includes("playlist") || link.includes("album") || link.includes("show") || link.includes("artist") || link.includes("track") || link.includes("episode"))) {
+                var linkTmp = link; linkTmp = linkTmp.replace("https://","" );    linkTmp = linkTmp.split  ("?")[0]        ;
+                    linkTmp = linkTmp.replace("open.spotify.com/"   ,"spotify:"); linkTmp = linkTmp.replace("/"       ,":");
+                console.log(linkTmp)
+                if (link.includes("playlist") || link.includes("album") || link.includes("show") || link.includes("artist")) {
+                    data = JSON.stringify({context_uri:linkTmp});
+                } else {
+                    data = JSON.stringify({uris:[linkTmp]});
+                }
             }
         }
-        SpotifyMeRequestRetry("Play",account,"/play"+((device==null||device=="")?"": "?device_id="+device ),"PUT",((linkTmp!=null&&linkTmp!="")?"{\"context_uri\":\""+linkTmp+"\"}":null))
+        SpotifyMeRequestRetry("Play",account,"/play"+((device==null||device=="")?"": "?device_id="+device ),"PUT",data||null)
         .then (()=>{console.log();})//nothing needed
         .catch(async(out:[number,any])=>{
             if (out[0]==13||out[0]==31) {
@@ -311,7 +316,7 @@ function SpotifyPause       (                                        account:str
  * @example
  * rejects with codes 1-269
  *  
- * codes 1, 2 and 11-18 are from the initial request
+ * codes 1 and 11-18 are from the initial request
  * codes   3-10         are from refressing the token
  * codes  19-36         are from the request after refressing
  * code     37           is from SpotifyToggle specifically
@@ -498,7 +503,8 @@ function SpotifyVolumeUp    (amount:number|null, device:string|null, account:str
         .then(async(json:any)=>{
             if (json.device                == null) { reject(37); console.log("SpotifyVolumeUpError1: device                == null"); return; }
             if (json.device.volume_percent == null) { reject(38); console.log("SpotifyVolumeUpError2: device.volume_percent == null"); return; }
-            SpotifyMeRequestRetry("VolumeUp",account,"/volume?volume_percent="+(Math.min(100,json.device.volume_percent+(amount||10)))+((device==null||device=="")?"": "&device_id="+device ),"PUT",null)
+            console.log(json.device.volume_percent,(amount||10),(Math.min(100,json.device.volume_percent+(amount||10))))
+            SpotifyMeRequestRetry("VolumeUp",account,"/volume?volume_percent="+(Math.min(100,json.device.volume_percent+(amount||10))).toString()+((device==null||device=="")?"": "&device_id="+device ),"PUT",null)
             .then ((json:any)=>{
                 console.log("SpotifyVolumeUp");
                 console.log(json);
@@ -536,7 +542,8 @@ function SpotifyVolumeDown  (amount:number|null, device:string|null, account:str
         .then(async(json:any)=>{
             if (json.device                == null) { reject(37); console.log("SpotifyVolumeDownError1: device == null"               ); return; }
             if (json.device.volume_percent == null) { reject(38); console.log("SpotifyVolumeDownError2: device.volume_percent == null"); return; }
-            SpotifyMeRequestRetry("VolumeDown",account,"/volume?volume_percent="+(Math.max(0,json.device.volume_percent-(amount||10)))+((device==null||device=="")?"": "&device_id="+device ),"PUT",null)
+            console.log(json.device.volume_percent,(amount||10),(Math.max(0,json.device.volume_percent-(amount||10))))
+            SpotifyMeRequestRetry("VolumeDown",account,"/volume?volume_percent="+(Math.max(0,json.device.volume_percent-(amount||10))).toString()+((device==null||device=="")?"": "&device_id="+device ),"PUT",null)
             .then ((json:any)=>{
                 console.log("SpotifyVolumeDown");
                 console.log(json);
@@ -582,21 +589,94 @@ function SpotifySetVolume   (volume:number,      device:string|null, account:str
     });
 }
 
+/**
+ * returns volume
+ * @date 5/26/2023
+ *  
+ * @param {(number|null)} amount
+ * @param {(string|null)} device
+ * @param {(string|null)} account
+ *  
+ * @example
+ * rejects with codes 1-38
+ *  
+ * codes 1, 2 and 11-18 are from the first request
+ * codes   3-10         are from refressing the token
+ * codes  19-36         are from the request after refressing
+ * code   37-38         are from SpotifyGetVolume specifically
+ */ 
+function SpotifyGetVolume       (                                    account:string|null):Promise<number            > {
+
+    return new Promise<number >(async( resolve:((value?:any)=>void), reject:((reason?:any)=>void) )=>{
+        SpotifyMeRequestRetry("GetVolume",account,"","GET",null)
+        .then(async(json:any)=>{
+            if (json.device                == null) { reject(37); console.log("SpotifyGetVolumeError1: device == null"               ); return; }
+            if (json.device.volume_percent == null) { reject(38); console.log("SpotifyGetVolumeError2: device.volume_percent == null"); return; }
+            resolve(json.device.volume_percent)
+        }).catch((out:[number,any])=>reject(out[0]));
+    });
+}
+
+/**
+ * returns volume
+ * @date 5/26/2023
+ *  
+ * @param {(number|null)} amount
+ * @param {(string|null)} device
+ * @param {(string|null)} account
+ *  
+ * @example
+ * rejects with codes 1-42
+ *  
+ * codes 1, 2 and 11-18 are from the first request
+ * codes   3-10         are from refressing the token
+ * codes  19-36         are from the request after refressing
+ * code   37-42         are from SpotifyGetThumbnail specifically
+ */ 
+function SpotifyGetThumbnail(                                        account:string|null):Promise<Buffer            > {
+    return new Promise<Buffer >(async( resolve:((value?:any)=>void), reject:((reason?:any)=>void) )=>{
+        SpotifyMeRequestRetry("GetThumbnail",account,"","GET",null)
+        .then(async(json:any)=>{
+            if (json.item                     == null) { reject(37); console.log("SpotifyGetThumbnailError1: item == null"                    ); return; }
+            if (json.item.album               == null) { reject(38); console.log("SpotifyGetThumbnailError2: item.album == null"              ); return; }
+            if (json.item.album.images        == null) { reject(39); console.log("SpotifyGetThumbnailError3: item.album.images == null"       ); return; }
+            if (json.item.album.images[0]     == null) { reject(40); console.log("SpotifyGetThumbnailError4: item.album.images[0] == null"    ); return; }
+            if (json.item.album.images[0].url == null) { reject(41); console.log("SpotifyGetThumbnailError5: item.album.images[0].url == null"); return; }
+            const url:string[] = json.item.album.images[0].url.replace("http://","").replace("https://","").split("/");
+            const domain:string = url.shift()!;
+            const path:string = "/"+url.join("/");
+            console.log(domain+path)
+            httpsRequestGetBufferPromise(domain,path,{})
+            .then((buff:Buffer) => {
+                resolve(buff);
+            }).catch((err:any) => {
+                reject(42); console.log("SpotifyGetThumbnailHttpsError5: " + err);
+            });
+        }).catch((out:[number,any])=>reject(out[0]));
+    });
+}
+
 var Spotify = {
     SpotifyClientID,
     SpotifyClientSecret,
     Link,
+    defaultAccount,
+
     SpotifyGetToken,
     getSpotifyDevices,
 
     SpotifyPlay,
     SpotifyPause,
     SpotifyToggle,
-    SpotifyStatus,
     SpotifySkipNext,
     SpotifySkipPrevious,
+    SpotifyStatus,
+
     SpotifyVolumeUp,
     SpotifyVolumeDown,
     SpotifySetVolume,
+    SpotifyGetVolume,
+
+    SpotifyGetThumbnail
 }
 export {Spotify};
