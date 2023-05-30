@@ -6,6 +6,12 @@ const redirectLink       :string = fs.readFileSync(__dirname+"/Spotify/Redirect.
 const Link               :string = "https://accounts.spotify.com/authorize?client_id=" + SpotifyClientID + "&response_type=code&redirect_uri=" + redirectLink + "&scope=user-modify-playback-state user-read-playback-position user-read-currently-playing user-read-recently-played user-read-playback-state";
 const defaultAccount     :string = "Crs"
 //#region library
+/**
+ * makes a request to the spotify api with the code from the authentication made by the user to get an acccess token and refresh token
+ * @date 5/26/2023
+ *
+ * @param {string} code
+ */
 function SpotifyGetToken(code:string) {
     httpsRequestPromise("accounts.spotify.com","/api/token","POST",{"Content-Type":"application/x-www-form-urlencoded","Accept":"application/json"},"grant_type=authorization_code&code=" + code + "&redirect_uri=" + redirectLink + "&client_id=" + SpotifyClientID + "&client_secret=" + SpotifyClientSecret)
     .then((curl:string) => {
@@ -28,6 +34,17 @@ function SpotifyGetToken(code:string) {
     });
 }
 
+/**
+ * makes a request to the spotify api to refresh the token for that account
+ * @date 5/26/2023
+ *
+ * @param {string} functionName used to display errors
+ * @param {(string|null)} account
+ * 
+ * @example
+ * rejects with codes 1-8
+ * general json error code is 3
+ */
 function SpotifyTokenRequest  (functionName:string,account?:string|null) {
     return new Promise<[boolean,string,string]>(async( resolve:((value?:any)=>void), reject:((reason?:any)=>void) )=>{
         var SpotifyRefreshTokenTmp:null|string = null;
@@ -47,7 +64,7 @@ function SpotifyTokenRequest  (functionName:string,account?:string|null) {
                                 fs.writeFileSync("Spotify/AccessToken" + (account||defaultAccount) + ".txt",json.access_token);
                                 resolve();
                             } catch (err:any) {
-                                reject(3); //console.log("Spotify"+functionName+"TryCatchError1: " + err);
+                                reject(3); console.log("Spotify"+functionName+"TryCatchError1: " + err);
                             }
                         } else {
                             reject(4); console.log("Spotify"+functionName+"ServerError1: " + JSON.stringify(json));
@@ -307,78 +324,6 @@ function SpotifyPause       (                                        account:str
 }
 
 /**
- * toggles spotify on/off
- * @date 5/26/2023
- *  
- * @param {(string|null)} device
- * @param {(string|null)} account
- *  
- * @example
- * rejects with codes 1-269
- *  
- * codes 1 and 11-18 are from the initial request
- * codes   3-10         are from refressing the token
- * codes  19-36         are from the request after refressing
- * code     37           is from SpotifyToggle specifically
- * codes  38-74         are from SpotifyPause
- * codes  75-269        are from SpotifyPlay
- */ 
-function SpotifyToggle      (                    device:string|null, account:string|null):Promise<boolean           > {
-    return new Promise<boolean>(async( resolve:((value?:any)=>void), reject:((reason?:any)=>void) )=>{
-        SpotifyMeRequestRetry("Toggle",account,"","GET",null)
-        .then (async(json:any)=>{
-            if (json.is_playing != null) {
-                if (json.is_playing == true) {
-                    SpotifyPause(account).then((val:boolean) => {
-                        resolve(val);
-                    }).catch((reason:number)=>{ reject(reason+37); });//maps errors 1-40 into 38-74
-                } else {
-                    SpotifyPlay(null,device,account).then((val:boolean) => {
-                        resolve(val);
-                    }).catch((reason:number)=>{ reject(reason+74); });//maps errors 1-195 into 75-269
-                }
-            } else {
-                reject(37); console.log("SpotifyToggleError1: IsPlaying == null");
-            }
-        })
-        .catch((out:[number,any])=>reject(out[0]));
-    });
-}
-
-/**
- * gets status of spotify playback
- * @date 5/26/2023
- *  
- * @param {(string|null)} account
- *  
- * @example
- * rejects with codes 1-37
- *  
- * codes 1, 2 and 11-18 are from the initial request
- * codes   3-10         are from refressing the token
- * codes  19-36         are from the request after refressing
- * code     37           is from SpotifyStatus specifically
- */ 
-function SpotifyStatus      (                                        account:string|null):Promise<[boolean,string[]]> {
-    return new Promise<[boolean,string[]]>(async( resolve:((value?:any)=>void), reject:((reason?:any)=>void) )=>{
-        SpotifyMeRequestRetry("Status",account,"","GET",null)
-        .then (async(json:any)=>{
-            if (json.is_playing == null) { reject(37); console.log("SpotifyStatusError1: IsPlaying == null"); return; }
-            if (json.is_playing == true) {
-                if (json.item != null && json.item.name != null && json.item.artists[0].name != null) {
-                    resolve([true, [json.item.name, ...(json.item.artists.map((artist:any)=>artist.name))]]);
-                } else {
-                    resolve([true, ["", ""]]);
-                }
-            } else {
-                resolve([false, ["", ""]]);
-            }
-        })
-        .catch((out:[number,any])=>reject(out[0]));
-    });
-}
-
-/**
  * skips to next song
  * @date 5/26/2023
  *  
@@ -416,7 +361,7 @@ function SpotifySkipNext    (                    device:string|null, account:str
                     })
                     .catch((out:[number,any])=>{reject(out[0]+40)});//maps errors 1-39 into 41-79
                 } else if (err.message == "Player command failed: Restriction violated") {
-                    reject(38); console.log("No clue. ln454 Spotify.js");
+                    reject(38); console.log("SpotifySkipNextError1: \"cannot skip.\"");
                 } else if (err.status == 502) {
                     reject(39); console.log("SpotifySkipNextHttpsError3: \"Bad gateway.\"");
                 } else {
@@ -467,7 +412,7 @@ function SpotifySkipPrevious(                    device:string|null, account:str
                     })
                     .catch((out:[number,any])=>{reject(out[0]+40)});//maps errors 1-39 into 41-79
                 } else if (err.message == "Player command failed: Restriction violated") {
-                    reject(38); console.log("No clue. ln454 Spotify.js");
+                    reject(38); console.log("SpotifySkipPreviousError1: \"cannot skip.\"");
                 } else if (err.status == 502) {
                     reject(39); console.log("SpotifySkipPreviousHttpsError4: \"Bad gateway.\"");
                 } else {
@@ -477,6 +422,78 @@ function SpotifySkipPrevious(                    device:string|null, account:str
                 resolve(true);
             } else reject(out[0]);
         });
+    });
+}
+
+/**
+ * gets status of spotify playback
+ * @date 5/26/2023
+ *  
+ * @param {(string|null)} account
+ *  
+ * @example
+ * rejects with codes 1-37
+ *  
+ * codes 1, 2 and 11-18 are from the initial request
+ * codes   3-10         are from refressing the token
+ * codes  19-36         are from the request after refressing
+ * code     37           is from SpotifyStatus specifically
+ */ 
+function SpotifyStatus      (                                        account:string|null):Promise<[boolean,string[]]> {
+    return new Promise<[boolean,string[]]>(async( resolve:((value?:any)=>void), reject:((reason?:any)=>void) )=>{
+        SpotifyMeRequestRetry("Status",account,"","GET",null)
+        .then (async(json:any)=>{
+            if (json.is_playing == null) { reject(37); console.log("SpotifyStatusError1: IsPlaying == null"); return; }
+            if (json.is_playing == true) {
+                if (json.item != null && json.item.name != null && json.item.artists[0].name != null) {
+                    resolve([true, [json.item.name, ...(json.item.artists.map((artist:any)=>artist.name))]]);
+                } else {
+                    resolve([true, ["", ""]]);
+                }
+            } else {
+                resolve([false, ["", ""]]);
+            }
+        })
+        .catch((out:[number,any])=>reject(out[0]));
+    });
+}
+
+/**
+ * toggles spotify on/off
+ * @date 5/26/2023
+ *  
+ * @param {(string|null)} device
+ * @param {(string|null)} account
+ *  
+ * @example
+ * rejects with codes 1-269
+ *  
+ * codes 1 and 11-18 are from the initial request
+ * codes   3-10         are from refressing the token
+ * codes  19-36         are from the request after refressing
+ * code     37           is from SpotifyToggle specifically
+ * codes  38-74         are from SpotifyPause
+ * codes  75-269        are from SpotifyPlay
+ */ 
+function SpotifyToggle      (                    device:string|null, account:string|null):Promise<boolean           > {
+    return new Promise<boolean>(async( resolve:((value?:any)=>void), reject:((reason?:any)=>void) )=>{
+        SpotifyMeRequestRetry("Toggle",account,"","GET",null)
+        .then (async(json:any)=>{
+            if (json.is_playing != null) {
+                if (json.is_playing == true) {
+                    SpotifyPause(account).then((val:boolean) => {
+                        resolve(val);
+                    }).catch((reason:number)=>{ reject(reason+37); });//maps errors 1-40 into 38-74
+                } else {
+                    SpotifyPlay(null,device,account).then((val:boolean) => {
+                        resolve(val);
+                    }).catch((reason:number)=>{ reject(reason+74); });//maps errors 1-195 into 75-269
+                }
+            } else {
+                reject(37); console.log("SpotifyToggleError1: IsPlaying == null");
+            }
+        })
+        .catch((out:[number,any])=>reject(out[0]));
     });
 }
 
@@ -503,7 +520,6 @@ function SpotifyVolumeUp    (amount:number|null, device:string|null, account:str
         .then(async(json:any)=>{
             if (json.device                == null) { reject(37); console.log("SpotifyVolumeUpError1: device                == null"); return; }
             if (json.device.volume_percent == null) { reject(38); console.log("SpotifyVolumeUpError2: device.volume_percent == null"); return; }
-            console.log(json.device.volume_percent,(amount||10),(Math.min(100,json.device.volume_percent+(amount||10))))
             SpotifyMeRequestRetry("VolumeUp",account,"/volume?volume_percent="+(Math.min(100,json.device.volume_percent+(amount||10))).toString()+((device==null||device=="")?"": "&device_id="+device ),"PUT",null)
             .then ((json:any)=>{
                 console.log("SpotifyVolumeUp");
@@ -542,7 +558,6 @@ function SpotifyVolumeDown  (amount:number|null, device:string|null, account:str
         .then(async(json:any)=>{
             if (json.device                == null) { reject(37); console.log("SpotifyVolumeDownError1: device == null"               ); return; }
             if (json.device.volume_percent == null) { reject(38); console.log("SpotifyVolumeDownError2: device.volume_percent == null"); return; }
-            console.log(json.device.volume_percent,(amount||10),(Math.max(0,json.device.volume_percent-(amount||10))))
             SpotifyMeRequestRetry("VolumeDown",account,"/volume?volume_percent="+(Math.max(0,json.device.volume_percent-(amount||10))).toString()+((device==null||device=="")?"": "&device_id="+device ),"PUT",null)
             .then ((json:any)=>{
                 console.log("SpotifyVolumeDown");
@@ -554,6 +569,34 @@ function SpotifyVolumeDown  (amount:number|null, device:string|null, account:str
                     resolve(true);
                 } else reject(out[0]+38);//maps errors 1-36 into 39-74
             });
+        }).catch((out:[number,any])=>reject(out[0]));
+    });
+}
+
+/**
+ * returns volume
+ * @date 5/26/2023
+ *  
+ * @param {(number|null)} amount
+ * @param {(string|null)} device
+ * @param {(string|null)} account
+ *  
+ * @example
+ * rejects with codes 1-38
+ *  
+ * codes 1, 2 and 11-18 are from the first request
+ * codes   3-10         are from refressing the token
+ * codes  19-36         are from the request after refressing
+ * code   37-38         are from SpotifyGetVolume specifically
+ */ 
+function SpotifyGetVolume       (                                    account:string|null):Promise<number            > {
+
+    return new Promise<number >(async( resolve:((value?:any)=>void), reject:((reason?:any)=>void) )=>{
+        SpotifyMeRequestRetry("GetVolume",account,"","GET",null)
+        .then(async(json:any)=>{
+            if (json.device                == null) { reject(37); console.log("SpotifyGetVolumeError1: device == null"               ); return; }
+            if (json.device.volume_percent == null) { reject(38); console.log("SpotifyGetVolumeError2: device.volume_percent == null"); return; }
+            resolve(json.device.volume_percent)
         }).catch((out:[number,any])=>reject(out[0]));
     });
 }
@@ -586,34 +629,6 @@ function SpotifySetVolume   (volume:number,      device:string|null, account:str
                 resolve(true);
             } else reject(out[0]);
         });
-    });
-}
-
-/**
- * returns volume
- * @date 5/26/2023
- *  
- * @param {(number|null)} amount
- * @param {(string|null)} device
- * @param {(string|null)} account
- *  
- * @example
- * rejects with codes 1-38
- *  
- * codes 1, 2 and 11-18 are from the first request
- * codes   3-10         are from refressing the token
- * codes  19-36         are from the request after refressing
- * code   37-38         are from SpotifyGetVolume specifically
- */ 
-function SpotifyGetVolume       (                                    account:string|null):Promise<number            > {
-
-    return new Promise<number >(async( resolve:((value?:any)=>void), reject:((reason?:any)=>void) )=>{
-        SpotifyMeRequestRetry("GetVolume",account,"","GET",null)
-        .then(async(json:any)=>{
-            if (json.device                == null) { reject(37); console.log("SpotifyGetVolumeError1: device == null"               ); return; }
-            if (json.device.volume_percent == null) { reject(38); console.log("SpotifyGetVolumeError2: device.volume_percent == null"); return; }
-            resolve(json.device.volume_percent)
-        }).catch((out:[number,any])=>reject(out[0]));
     });
 }
 
@@ -667,15 +682,15 @@ var Spotify = {
 
     SpotifyPlay,
     SpotifyPause,
-    SpotifyToggle,
     SpotifySkipNext,
     SpotifySkipPrevious,
     SpotifyStatus,
+    SpotifyToggle,
 
     SpotifyVolumeUp,
     SpotifyVolumeDown,
-    SpotifySetVolume,
     SpotifyGetVolume,
+    SpotifySetVolume,
 
     SpotifyGetThumbnail
 }

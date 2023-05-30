@@ -429,15 +429,15 @@ var localdevices:{ [key:string]:LocalDevice } = {
         device:{
             name:"Spotify",
             functions:{
-                "toggle"      :{name:"Toggle"      ,parameters:[                                                               {name:"device",type:"string",nullable:true,defaultValue:Spotify.defaultAccount}],public:true},
+                "authenticate":{name:"Authenticate",parameters:[                                                                                                                                              ],public:true},
                 "play"        :{name:"Play"        ,parameters:[{name:"link"  ,type:"string",nullable:true ,defaultValue:""  },{name:"device",type:"string",nullable:true,defaultValue:Spotify.defaultAccount}],public:true},
                 "pause"       :{name:"Pause"       ,parameters:[                                                               {name:"device",type:"string",nullable:true,defaultValue:Spotify.defaultAccount}],public:true},
                 "skipnext"    :{name:"SkipNext"    ,parameters:[                                                               {name:"device",type:"string",nullable:true,defaultValue:Spotify.defaultAccount}],public:true},
                 "skipprevious":{name:"SkipPrevious",parameters:[                                                               {name:"device",type:"string",nullable:true,defaultValue:Spotify.defaultAccount}],public:true},
+                "toggle"      :{name:"Toggle"      ,parameters:[                                                               {name:"device",type:"string",nullable:true,defaultValue:Spotify.defaultAccount}],public:true},
                 "volumeup"    :{name:"VolumeUp"    ,parameters:[{name:"amount",type:"number",nullable:false,defaultValue:"10"},{name:"device",type:"string",nullable:true,defaultValue:Spotify.defaultAccount}],public:true},
                 "volumedown"  :{name:"VolumeDown"  ,parameters:[{name:"amount",type:"number",nullable:false,defaultValue:"10"},{name:"device",type:"string",nullable:true,defaultValue:Spotify.defaultAccount}],public:true},
-                "setvolume"   :{name:"SetVolume"   ,parameters:[{name:"volume",type:"number",nullable:false,defaultValue:"50"},{name:"device",type:"string",nullable:true,defaultValue:Spotify.defaultAccount}],public:true},
-                "authenticate":{name:"Authenticate",parameters:[                                                                                                                                              ],public:true}
+                "setvolume"   :{name:"SetVolume"   ,parameters:[{name:"volume",type:"number",nullable:false,defaultValue:"50"},{name:"device",type:"string",nullable:true,defaultValue:Spotify.defaultAccount}],public:true}
             },
             devices:{}
         },
@@ -453,16 +453,16 @@ var localdevices:{ [key:string]:LocalDevice } = {
                 Spotify.SpotifyPause       (                             parameters[0])
                 .then((val:boolean) => {}).catch((err:number) => {});
             },
-            "spotify.toggle()"      : function (parameters:Array<string>) {
-                Spotify.SpotifyToggle      (                        null,parameters[0])
-                .then((val:boolean) => {}).catch((err:number) => {});
-            },
             "spotify.skipnext()"    : function (parameters:Array<string>) {
                 Spotify.SpotifySkipNext    (                        null,parameters[0])
                 .then((val:boolean) => {}).catch((err:number) => {});
             },
             "spotify.skipprevious()": function (parameters:Array<string>) {
                 Spotify.SpotifySkipPrevious(                        null,parameters[0])
+                .then((val:boolean) => {}).catch((err:number) => {});
+            },
+            "spotify.toggle()"      : function (parameters:Array<string>) {
+                Spotify.SpotifyToggle      (                        null,parameters[0])
                 .then((val:boolean) => {}).catch((err:number) => {});
             },
             "spotify.volumeup()"    : function (parameters:Array<string>) {
@@ -492,38 +492,38 @@ var localdevices:{ [key:string]:LocalDevice } = {
             "/SpotifyPlay"              :function (req:any, res:any) {
                 Spotify.SpotifyPlay        (null                       , null, Spotify.defaultAccount).then((val:boolean           ) => { res.send(val                  ); }).catch((err:number) => { res.send("error"+err                 ); });
             },
+            "/SpotifyPause"             :function (req:any, res:any) {
+                Spotify.SpotifyPause       (                                   Spotify.defaultAccount).then((val:boolean           ) => { res.send(val                  ); }).catch((err:number) => { res.send("error"+err                 ); });
+            }, 
             "/SpotifySkipNext"          :function (req:any, res:any) {
                 Spotify.SpotifySkipNext    (                             null, Spotify.defaultAccount).then((val:boolean           ) => { res.send(val                  ); }).catch((err:number) => { res.send("error"+err                 ); });
             },
             "/SpotifySkipPrevious"      :function (req:any, res:any) {
                 Spotify.SpotifySkipPrevious(                             null, Spotify.defaultAccount).then((val:boolean           ) => { res.send(val                  ); }).catch((err:number) => { res.send("error"+err                 ); });
             },
-            "/SpotifyPause"             :function (req:any, res:any) {
-                Spotify.SpotifyPause       (                                   Spotify.defaultAccount).then((val:boolean           ) => { res.send(val                  ); }).catch((err:number) => { res.send("error"+err                 ); });
-            }, 
-            "/SpotifyToggle"            :function (req:any, res:any) {
-                Spotify.SpotifyToggle      (                             null, Spotify.defaultAccount).then((val:boolean           ) => { res.send(val                  ); }).catch((err:number) => { res.send("error"+err                 ); });
-            },
             "/SpotifyStatus"            :function (req:any, res:any) {
                 Spotify.SpotifyStatus      (                                   Spotify.defaultAccount).then((val:[boolean,string[]]) => { res.send(JSON.stringify(val)  ); }).catch((err:number) => { res.send("[\"error" + err + "\", []]"); });
+            },
+            "/SpotifyToggle"            :function (req:any, res:any) {
+                Spotify.SpotifyToggle      (                             null, Spotify.defaultAccount).then((val:boolean           ) => { res.send(val                  ); }).catch((err:number) => { res.send("error"+err                 ); });
             },
             "/SpotifyVolumeUp"          :function (req:any, res:any) {
                 Spotify.SpotifyVolumeUp    (null                       , null, Spotify.defaultAccount).then((val:boolean           ) => { res.send(val                  ); }).catch((err:number) => { res.send("error"+err                 ); });
             },
-            "/SpotifyVolumeDown"        :function (req:any, res:any) {
-                Spotify.SpotifyVolumeDown  (null                       , null, Spotify.defaultAccount).then((val:boolean           ) => { res.send(val                  ); }).catch((err:number) => { res.send("error"+err                 ); });
-            },
             "/SpotifyVolumeUp/:amount"  :function (req:any, res:any) {
                 Spotify.SpotifyVolumeUp    (parseInt(req.params.amount), null, Spotify.defaultAccount).then((val:boolean           ) => { res.send(val                  ); }).catch((err:number) => { res.send("error"+err                 ); });
+            },
+            "/SpotifyVolumeDown"        :function (req:any, res:any) {
+                Spotify.SpotifyVolumeDown  (null                       , null, Spotify.defaultAccount).then((val:boolean           ) => { res.send(val                  ); }).catch((err:number) => { res.send("error"+err                 ); });
             },
             "/SpotifyVolumeDown/:amount":function (req:any, res:any) {
                 Spotify.SpotifyVolumeDown  (parseInt(req.params.amount), null, Spotify.defaultAccount).then((val:boolean           ) => { res.send(val                  ); }).catch((err:number) => { res.send("error"+err                 ); });
             },
-            "/SpotifySetVolume/:volume":function (req:any, res:any) {
-                Spotify.SpotifySetVolume   (parseInt(req.params.volume), null, Spotify.defaultAccount).then((val:boolean           ) => { res.send(val                  ); }).catch((err:number) => { res.send("error"+err                 ); });
-            },
             "/SpotifyGetVolume":function (req:any, res:any) {
                 Spotify.SpotifyGetVolume   (                                   Spotify.defaultAccount).then((val:number            ) => { res.send(val.toString()       ); }).catch((err:number) => { res.send("error"+err                 ); });
+            },
+            "/SpotifySetVolume/:volume":function (req:any, res:any) {
+                Spotify.SpotifySetVolume   (parseInt(req.params.volume), null, Spotify.defaultAccount).then((val:boolean           ) => { res.send(val                  ); }).catch((err:number) => { res.send("error"+err                 ); });
             },
             "/SpotifyGetThumbnail":function (req:any, res:any) {
                 Spotify.SpotifyGetThumbnail(                                   Spotify.defaultAccount).then((val:Buffer            ) => { res.type("jpeg"); res.send(val); }).catch((err:number) => { res.send("error"+err                 ); });
