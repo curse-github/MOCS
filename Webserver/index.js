@@ -79,6 +79,7 @@ function setup() {
 					} else { document.getElementById("div1").innerHTML = msg.data; }
 				} else if (msg.type == "ping" && msg.data != null) {
 					send("{\"type\":\"pong\",\"data\":\"" + msg.data + "\"}");
+					console.log("pong");
 				} else if (msg.type == "redirect") {
 					var date = new Date();
 					date.setTime(date.getTime() + (10000));
@@ -87,11 +88,13 @@ function setup() {
 				} else if (msg.type == "command") {
 					cmd = msg.data;
 					if (cmd.toLowerCase() == "connect()") {
+						console.log(msg)
 						processDevice(document.body, msg.parameters[1], msg.parameters[0].toLowerCase(), 1, true);
 						setTimeout(() => {
 							document.getElementById(msg.parameters[1].name.toLowerCase() + "-P").setAttribute("deleted",false);
 						}, 25);
 					} else if (cmd.toLowerCase() == "disconnect()") {
+						console.log(msg)
 						let element = document.getElementById(msg.parameters[0].toLowerCase() + "-P");
 						element.setAttribute("deleted",true);
 						setTimeout(() => {
@@ -138,7 +141,7 @@ setup();
 
 function processDevice(parent,device,deviceName, tabs, startDeleted) {
 	if ((device.functions != null && Object.keys(device.functions).length > 0) || (device.devices != null && Object.keys(device.devices).length > 0)) {
-		var p = append(parent,"p", device.name + "   ", {id:device.name.toLowerCase() + "-P", deleted:(startDeleted == false || startDeleted == null) ? false : true, style:"margin-left: " + (tabSize * tabs) + "px;padding-top:0;margin-bottom:0;margin-top:0;"});
+		var p = append(parent,"p", device.name + "   ", {id:device.name.toLowerCase() + "-P", deleted:(startDeleted == false || startDeleted == null) ? false : true, style:"margin-left: " + tabSize + "px;padding-top:0;margin-bottom:0;margin-top:0;"});
 		append(p, "button", "^", {
 			class:"btn btn-collapser border rounded-0 text-white",
 			onclick:"document.getElementById(\"" + device.name.toLowerCase() + "\").setAttribute(\"collapsed\",!(document.getElementById(\"" + device.name.toLowerCase() + "\").getAttribute(\"collapsed\") === \"true\")); this.innerText = (document.getElementById(\"" + device.name.toLowerCase() + "\").getAttribute(\"collapsed\") === \"true\") ? \"v\" : \"^\";"
@@ -146,7 +149,8 @@ function processDevice(parent,device,deviceName, tabs, startDeleted) {
 		var collapseDiv = append(p,"div","",{
 			collapsed:false,
 			id:device.name.toLowerCase(),
-			class:"div-collapsable"
+			class:"div-collapsable",
+			style:"margin-left:"+tabSize+"px"
 		});
 		Object.entries(device.functions).forEach((j) => {
 			if (j != null && j[1] != null && j[1].public != false) {
@@ -174,6 +178,7 @@ function processDevice(parent,device,deviceName, tabs, startDeleted) {
 					}
 				}
 				onclick += ']}}")';
+				//1console.log(deviceName + "." + i.name + "()")
 				append(deviceP,"input","",{
 					type:"button",
 					value:deviceName + "." + i.name + "()",
@@ -195,7 +200,7 @@ function processDevice(parent,device,deviceName, tabs, startDeleted) {
 										input.setAttribute("value","string");
 										break;
 									case "bool":
-										input.setAttribute("value","bool");
+										input.setAttribute("value","true");
 										break;
 									case "number":
 										input.setAttribute("value","1");
@@ -212,7 +217,7 @@ function processDevice(parent,device,deviceName, tabs, startDeleted) {
 		});
 		if (device.devices != null) {
 			Object.entries(device.devices).forEach((j) => {
-				if (j != null && j[1] != null && (j[1].public == true || j[1].public == null)) { processDevice(collapseDiv, j[1], deviceName + "." + j[1].name, tabs + 1); }
+				if (j != null && j[1] != null && (j[1].public == true || j[1].public == null)) { processDevice(collapseDiv, j[1], deviceName + "." + j[1].name, tabs + 1, false); }
 			});
 		}
 	}

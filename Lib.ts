@@ -146,7 +146,7 @@ export interface Device{
 export interface cmdData{
     device:string,
     function:string,
-    parameters:Array<any>
+    parameters:Array<string|boolean|number|null>
 }
 /**
  * Interface used the represent data from a connection.
@@ -236,33 +236,33 @@ export var exampleConnection:connection = {
         }
     }
 };
-var thing = {
+var exampleConnectionJSON:any = {
     "type":"connection",
     "data":{
         "name": "deviceName",
         "functions":{
-            "function1Name":{
+            "function1name":{
                 "name":"function1Name",
                 "parameters":[
-                    {"name":"childDeviceParameter1Name","type":"string","nullable":false},
-                    {"name":"childDeviceParameter2Name","type":"bool",  "nullable":false},
-                    {"name":"childDeviceParameter3Name","type":"number","nullable":true}
+                    {"name":"Parameter1Name","type":"string","nullable":false},
+                    {"name":"Parameter2Name","type":"bool",  "nullable":false},
+                    {"name":"Parameter3Name","type":"number","nullable":true}
                 ],
                 "public":true
             }
         },
         "devices": {
-            "childDeviceName": {
+            "childdevicename": {
                 "name":"childDeviceName",
                 "functions":{
-                    "childDeviceFunction1Name":{
+                    "childdevicefunction1name":{
                         "name":"childDeviceFunction1Name",
                         "parameters":[
                             {"name":"childDeviceParameter1Name","type":"string","nullable":false},
                             {"name":"childDeviceParameter2Name","type":"bool",  "nullable":false},
                             {"name":"childDeviceParameter3Name","type":"number","nullable":true}
                         ],
-                        "public":false
+                        "public":true
                     }
                 }
             }
@@ -271,15 +271,50 @@ var thing = {
 };
 //sent as a client to call a function on a device
 var exampleCommand:command = { // this would represent device1.childDevice.functionName(123,"string",null,false);
-    "type":"command",
-    "data":{
-        "device":"device1",
-        "function":"subscribeConnection",
-        "parameters":[
+    type:"command",
+    data:{
+        device:"device1",
+        function:"subscribeConnection",
+        parameters:[
             123,
             "string",
             null,
             false
+        ]
+    }
+};
+var exampleCommandJSON:any = {
+    "type":"command",
+    "data":{
+        "device":"self.Spotify",
+        "function":"play",
+        "parameters":[
+            "",
+            "Crs"
+        ]
+    }
+};
+var exampleCommandJSONSubscribeConn:any = {
+    "type":"command",
+    "data":{
+        "device":"self",
+        "function":"SubscribeConnection",
+        "parameters":[
+            "Nanopi",
+            "self.Spotify",
+            "Play"
+        ]
+    }
+};
+var exampleCommandJSONSubscribeDisconn:any = {
+    "type":"command",
+    "data":{
+        "device":"self",
+        "function":"SubscribeDisconnection",
+        "parameters":[
+            "Nanopi",
+            "self.Spotify",
+            "Play"
         ]
     }
 };
@@ -289,3 +324,33 @@ var examplePong:pingpong = {
     "data":2 // used as an id, needs to match the data sent in the ping message
 };
 //#endregion
+
+export class Colors {
+    static Reset     :string = "\x1b[0m"  ;
+    static Bright    :string = "\x1b[1m"  ;
+    //static Dim       :string = "\x1b[2m";//does not work at all
+    static Underscore:string = "\x1b[4m"  ;
+    //static Blink     :string = "\x1b[5m";//does not work at all
+    static Reverse   :string = "\x1b[7m"  ;
+    //static Hidden    :string = "\x1b[8m";//does not work at all
+
+    static FgBlack   :string = "\x1b[30m" ;
+    static FgRed     :string = "\x1b[31m" ;
+    static FgGreen   :string = "\x1b[32m" ;
+    static FgYellow  :string = "\x1b[33m" ;//does not work on powershell somehow
+    static FgBlue    :string = "\x1b[34m" ;
+    static FgMagenta :string = "\x1b[35m" ;
+    static FgCyan    :string = "\x1b[36m" ;
+    static FgWhite   :string = "\x1b[37m" ;
+    static FgGray    :string = "\x1b[90m" ;
+
+    static BgBlack   :string = "\x1b[40m" ;
+    static BgRed     :string = "\x1b[41m" ;
+    static BgGreen   :string = "\x1b[42m" ;
+    static BgYellow  :string = "\x1b[43m" ;
+    static BgBlue    :string = "\x1b[44m" ;
+    static BgMagenta :string = "\x1b[45m" ;
+    static BgCyan    :string = "\x1b[46m" ;
+    static BgWhite   :string = "\x1b[47m" ;
+    static BgGray    :string = "\x1b[100m";
+}
