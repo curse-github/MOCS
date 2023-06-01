@@ -16,12 +16,13 @@ console.clear();
 
 var devices:{[key:string]:Device|null} = {
     "self": {
-        "name":"self",
-        "functions":{
-            "authenticate":{"name":"authenticate","parameters":[{"name":"username","type":"string","nullable":false}, {"name":"password","type":"string","nullable":false},{"name":"createDevice","type":"bool","nullable":true,"public":false}],"public":false},
-            "callback":{"name":"callback","parameters":[{"name":"callback","type":"number","nullable":false}, {"name":"returnVal","type":"string","nullable":false}],"public":false},
-            "subscribeconnection":{"name":"subscribeConnection","parameters":[{"name":"deviceName","type":"string","nullable":false},{"name":"callbackDeviceName","type":"string","nullable":false},{"name":"callbackFunctionName","type":"string","nullable":false}],"public":false},
-            "subscribedisconnection":{"name":"subscribeDisconnection","parameters":[{"name":"deviceName","type":"string","nullable":false},{"name":"callbackDeviceName","type":"string","nullable":false},{"name":"callbackFunctionName","type":"string","nullable":false}],"public":false},
+        name:"self",
+        public:true,
+        functions:{
+            "authenticate"          :{name:"authenticate"          ,public:false,parameters:[{name:"username"  ,type:"string",nullable:false,public:false},{name:"password"          ,type:"string",nullable:false,public:false},{name:"createDevice"        ,type:"boolean",nullable:true ,public:false}]},
+            "callback"              :{name:"callback"              ,public:false,parameters:[{name:"callback"  ,type:"number",nullable:false,public:false},{name:"returnVal"         ,type:"string",nullable:false,public:false}]},
+            "subscribeconnection"   :{name:"subscribeConnection"   ,public:false,parameters:[{name:"deviceName",type:"string",nullable:false,public:false},{name:"callbackDeviceName",type:"string",nullable:false,public:false},{name:"callbackFunctionName",type:"string" ,nullable:false,public:false}]},
+            "subscribedisconnection":{name:"subscribeDisconnection",public:false,parameters:[{name:"deviceName",type:"string",nullable:false,public:false},{name:"callbackDeviceName",type:"string",nullable:false,public:false},{name:"callbackFunctionName",type:"string" ,nullable:false,public:false}]},
         },
         "devices": {}
     }
@@ -38,22 +39,25 @@ function pingDevices() {
     pings = {};
     var keys:Array<string> = Object.keys(devices);
     for(var i:number = 1; i < keys.length; i++) {
-        if (keys[i] == "self") continue;
-        pings[keys[i]] = false;
-        if (devices[keys[i]] != null && websockets[keys[i]] != null) {
-            websockets[keys[i]].send("{\"type\":\"ping\", \"data\":\"" + keys[i] + "\"}");
+        const key = keys[i];
+        if (key == "self") continue;
+        pings[key] = false;
+        if (devices[key] != null && websockets[key] != null) {
+            websockets[key].send("{\"type\":\"ping\", \"data\":\"" + key + "\"}");
         }
     }
     setTimeout(() => {
-        //after half a second see which of the devices responded with a pong
+        //after 100ms see which of the devices responded with a pong
         var keys2:Array<string> = Object.keys(devices);
-        keys2 = keys2;
         for(var i:number = 0; i < keys2.length; i++) {
-            if (devices[keys2[i]] != null && keys2[i] != "self") {
-                if (!pings[keys2[i]]) {
+            const key = keys2[i];
+            if (devices[key] != null && key != "self") {
+                if (!pings[key]) {
                     //and if they didnt count them as disconnected and remove them from the database
-                    if (websockets[keys2[i]] != null) { websockets[keys2[i]].close(); delete websockets[keys2[i]]; }
-                    delete devices[keys2[i]];
+                    if (websockets[key] != null) { websockets[key].close(); delete websockets[key]; }
+                    var wasPublic:boolean = true
+                    if (devices[key]) { wasPublic = devices[key]!.public!;
+                    delete devices[key]; }
 
                     //remove subscriptions made by that device
                     const connectKeys = Object.keys(connectionSubscriptions);
@@ -81,22 +85,24 @@ function pingDevices() {
                         else disconnectionSubscriptions[key] = subs.filter((el:any)=>el!=null)
                     }
 
-                    if (keys2[i].startsWith("web")) { continue; }// if its a browser made device, skip next steps
-                    console.log("Device \"" + keys2[i] + "\" disconnected.");
+                    if (key.startsWith("web")) { continue; }// if its a browser made device, skip next steps
+                    if (wasPublic) console.log("Device \"" + key + "\" disconnected.");
 
                     //send disconnection subscriptions
-                    if (disconnectionSubscriptions[keys2[i].toLowerCase()] != null && (typeof disconnectionSubscriptions[keys2[i].toLowerCase()]) == "object" && Array.isArray(disconnectionSubscriptions[keys2[i].toLowerCase()])) {
-                        for(var j:number = 0; j < disconnectionSubscriptions[keys2[i].toLowerCase()].length; j++) {
-                            handleCommand(JSON.parse("{\"type\":\"command\",\"data\":{\"device\":\"" + disconnectionSubscriptions[keys2[i].toLowerCase()][j][0] + "\",\"function\":\"" + disconnectionSubscriptions[keys2[i].toLowerCase()][j][1] + "\",\"parameters\":[\"" + keys2[i] + "\"]}}"));
+                    var DisconnSubs:any = disconnectionSubscriptions[key.toLowerCase()];
+                    if (DisconnSubs != null && (typeof DisconnSubs) == "object" && Array.isArray(DisconnSubs)) {
+                        for(var j:number = 0; j < DisconnSubs.length; j++) {
+                            handleCommand(JSON.parse("{\"type\":\"command\",\"data\":{\"device\":\"" + DisconnSubs[j][0] + "\",\"function\":\"" + DisconnSubs[j][1] + "\",\"parameters\":[\"" + key + "\"]}}"));
                         }
                     }
-                    if (disconnectionSubscriptions["any"] != null && (typeof disconnectionSubscriptions["any"]) == "object" && Array.isArray(disconnectionSubscriptions["any"])) {
-                        for(var j:number = 0; j < disconnectionSubscriptions["any"].length; j++) {
-                            if (websockets[disconnectionSubscriptions["any"][j][0]] != null) {
-                                websockets[disconnectionSubscriptions["any"][j][0]].send(JSON.stringify({
+                    var anyDisconnSubs:any = disconnectionSubscriptions["any"];
+                    if (anyDisconnSubs != null && (typeof anyDisconnSubs) == "object" && Array.isArray(anyDisconnSubs)) {
+                        for(var j:number = 0; j < anyDisconnSubs.length; j++) {
+                            if (websockets[anyDisconnSubs[j][0]] != null) {
+                                websockets[anyDisconnSubs[j][0]].send(JSON.stringify({
                                     type:"command",
-                                    data:disconnectionSubscriptions["any"][j][1] + "()",
-                                    parameters:[keys2[i]]
+                                    data:anyDisconnSubs[j][1] + "()",
+                                    parameters:[key]
                                 }));
                             }
                         }
@@ -134,7 +140,7 @@ ws.on('connection', (websocket:any) => {
                             try { if ((typeof device.public) == "string") device.public = JSON.parse(device.public);
                             } catch (err:any) { console.log("invalid connection: "+((parentName!=null)?(parentName+"."):(""))+newDevice.name+".public is not a boolean"); return false; }
                             if ((typeof device.public) != "boolean" && device.public != null) { console.log("invalid connection: "+((parentName!=null)?(parentName+"."):(""))+newDevice.name+".public is not a boolean."); return false; }
-                            newDevice.public = device.public||true;
+                            newDevice.public = ((device.public!=null)?device.public:true);
 
                             if (device.functions != null) {
                                 if ((typeof device.functions) != "object") { console.log("invalid connection: "+((parentName!=null)?(parentName+"."):(""))+newDevice.name+".functions is not an object."); return false; }
@@ -158,7 +164,7 @@ ws.on('connection', (websocket:any) => {
                                     try { if ((typeof func.public) == "string") func.public = JSON.parse(func.public);
                                     } catch (err:any) { console.log("invalid connection: "+((parentName!=null)?(parentName+"."):(""))+newDevice.name+".functions"+(((typeof index) == "string")?("."+index):("["+index+"]"))+".public is not a boolean."); return false; }
                                     if ((typeof func.public) != "boolean" && func.public != null) { console.log("12"); return false; }
-                                    newFunc.public = func.public||true;
+                                    newFunc.public = ((func.public!=null)?func.public:true);
                                     if ((typeof func.parameters) != "object" || !Array.isArray(func.parameters)) { console.log("invalid connection: "+((parentName!=null)?(parentName+"."):(""))+newDevice.name+".functions"+(((typeof index) == "number")?("["+index+"]"):("."+index))+".parameters is not an object."); return false; }
                                     newFunc.parameters = [];
                                     for (let i = 0; i < func.parameters.length; i++) {
@@ -223,7 +229,7 @@ ws.on('connection', (websocket:any) => {
                                 websockets[msg.data.name.toLowerCase()] = websocket;
                                 //response
                                 websocket.send("{\"reply\" : \"succes\"" + (msg.id != null ? ", \"id\" : " + msg.id : "") + "}");
-                                console.log("Device \"" + msg.data.name + "\" conneced.");
+                                if (msg.data.public) console.log("Device \"" + msg.data.name + "\" conneced.");
                                 connected = true;
 
                                 if (msg.data.name.toLowerCase() == "nanopi") {
@@ -264,9 +270,10 @@ ws.on('connection', (websocket:any) => {
                 case "command": {
                     //console.log("command: \n" + message + "\n");
                     if (msg.data != null) {
-                        if (msg.data.device     == null) { console.log("invalid command: Missing target device."             ); return; }
-                        if (msg.data.function   == null) { console.log("invalid command: Missing target function."           ); return; }
-                        if (msg.data.parameters == null) { console.log("invalid command: Missing target function parameters."); return; }
+                        
+                        if (msg.data.device     == null) { console.log(msg); console.log("invalid command: Missing target device."             ); return; }
+                        if (msg.data.function   == null) { console.log(msg); console.log("invalid command: Missing target function."           ); return; }
+                        if (msg.data.parameters == null) { console.log(msg); console.log("invalid command: Missing target function parameters."); return; }
 
                         var cmd:command = msg as command;
                         handleCommand(cmd, websocket);
@@ -290,7 +297,7 @@ ws.on('connection', (websocket:any) => {
                 }
                 default: { console.log("invalid command: Unknown message type \"" + msg.type + "\"."); }
             }
-        } catch (err:any) { console.log("invalid command: Unable to parse json of message."); console.log(err); }
+        } catch (err:any) { console.log(message); console.log("invalid command: Unable to parse json of message."); console.log(err); }
     });
 });
 function handleCommand(msg:string|command, websocket?:any) {
@@ -439,7 +446,7 @@ function handleCommand(msg:string|command, websocket?:any) {
                 else console.log("invalid command: device \""+websocket+"\" not connected");
             }
         }
-    } else { console.log("invalid command: message of wrong type"); }
+    } else { console.log("internal error: Message is not object"); }
 }
 function findFunction(list:{[key:string]:Device|null},data:cmdData,type?:number) : Array<boolean|string|{[key:string]:string}>{
     if (list != null && (typeof list) == "object" && !Array.isArray(list) && data != null) {
@@ -491,11 +498,11 @@ function findFunction(list:{[key:string]:Device|null},data:cmdData,type?:number)
                 if (type == 2) {
                     return [{ type : "command", data : data.function + "()", "parameters" : JSON.stringify(data.parameters) }];
                 } else if (type == null || type == 1) {
-                    return [deviceName, "{\"type\":\"command\",\"data\":\"" + data.function + "()\", \"parameters\":" + JSON.stringify(data.parameters) + "}"];
+                    return [deviceName.toLowerCase(), "{\"type\":\"command\",\"data\":\"" + data.function + "()\", \"parameters\":" + JSON.stringify(data.parameters) + "}"];
                 }
             } else {
                 if (device == null) {
-                    console.log("invalid command: Device not found");
+                    console.log("invalid command: Device \""+deviceName+"\" not found");
                 } else if (Object.keys(device.functions).length <= 0 || device.functions[data.function.toLowerCase()] == null) {
                     console.log("invalid command: device does not contain function \"" + data.function + "\"");
                 }
@@ -517,9 +524,9 @@ function findFunction(list:{[key:string]:Device|null},data:cmdData,type?:number)
                 }
             } else {
                 if (list[shift] == null) {
-                    console.log("invalid command: Device not found");
+                    console.log("invalid command: Device \""+shift+"\" not found");
                 } else if (Object.keys(list[shift]!.devices!).length <= 0) {
-                    console.log("invalid command: Device " + shift + " does not have any child devices");
+                    console.log("invalid command: Device \"" + shift + "\" does not have any child devices");
                 } else {
                     console.log("weird error ln414");
                 }

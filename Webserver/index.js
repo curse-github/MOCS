@@ -28,6 +28,7 @@ setInterval(() => {
 var ws = new WebSocket("ws://" + url + ":42069");
 //console.log("started connection");
 connecting = true;
+var data = {};
 function setup() {
 	ws.onopen = () => {
 		connected = true;
@@ -52,9 +53,9 @@ function setup() {
 							onclick:"collapseAll()"
 						});
 
-						var data = msg.data;
+						data = msg.data;
 						Object.keys(data).forEach((i) => {
-							if (data[i] != null && (data[i].public == true || data[i].public == "true" || data[i].public == null)) {
+							if (data[i] != null && (data[i].public == true)) {
 								processDevice(page,data[i], i, 0, false);
 							}
 						});
@@ -79,7 +80,6 @@ function setup() {
 					} else { document.getElementById("div1").innerHTML = msg.data; }
 				} else if (msg.type == "ping" && msg.data != null) {
 					send("{\"type\":\"pong\",\"data\":\"" + msg.data + "\"}");
-					console.log("pong");
 				} else if (msg.type == "redirect") {
 					var date = new Date();
 					date.setTime(date.getTime() + (10000));
@@ -88,18 +88,20 @@ function setup() {
 				} else if (msg.type == "command") {
 					cmd = msg.data;
 					if (cmd.toLowerCase() == "connect()") {
-						console.log(msg)
-						processDevice(document.body, msg.parameters[1], msg.parameters[0].toLowerCase(), 1, true);
-						setTimeout(() => {
-							document.getElementById(msg.parameters[1].name.toLowerCase() + "-P").setAttribute("deleted",false);
-						}, 25);
+						if (msg.parameters[1] != null && (msg.parameters[1].public == true)) {
+							processDevice(document.body, msg.parameters[1], msg.parameters[0].toLowerCase(), 1, true);
+							setTimeout(() => {
+								document.getElementById(msg.parameters[1].name.toLowerCase() + "-P").setAttribute("deleted",false);
+							}, 25);
+						}
 					} else if (cmd.toLowerCase() == "disconnect()") {
-						console.log(msg)
 						let element = document.getElementById(msg.parameters[0].toLowerCase() + "-P");
-						element.setAttribute("deleted",true);
-						setTimeout(() => {
-							element.parentNode.removeChild(element);
-						}, 300);
+						if (element) {
+							element.setAttribute("deleted",true);
+							setTimeout(() => {
+								element.parentNode.removeChild(element);
+							}, 300);
+						}
 					}
 				} else if (msg.type == "pong") {
 					//console.log("pong");
