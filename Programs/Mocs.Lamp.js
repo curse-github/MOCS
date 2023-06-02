@@ -13,7 +13,7 @@ function SetupWebsocket() {
     var _status = "{\"name\":\"status\",\"parameters\":[{\"name\":\"CallbackFunction\",\"type\":\"string\",\"nullable\":true}],\"public\":false}";
     var _buttonConnect = "{\"name\":\"buttonConnect\",\"parameters\":[{\"name\":\"device\",\"type\":\"string\",\"nullable\":true}],\"public\":false}";
     ws.send("{\"type\":\"connection\",\"data\":{\"name\":\"Lamp\",\"functions\":{\"toggle\":" + _toggle + ",\"turnon\":" + _turnOn + ",\"turnoff\":" + _turnOff + ",\"status\":" + _status + ",\"buttonconnect\":" + _buttonConnect + "},\"devices\":{}}}");
-    ws.send("{\"type\":\"command\",\"data\":{\"device\":\"self\",\"function\":\"subscribeConnection\",\"parameters\":[\"nanopi\",\"lamp\",\"buttonConnect\"]}}");
+    //ws.send("{\"type\":\"command\",\"data\":{\"device\":\"self\",\"function\":\"subscribeConnection\",\"parameters\":[\"nanopi\",\"lamp\",\"buttonConnect\"]}}");
     ws.onerror = function (error) { console.log("{\"error\" : " + error + "}"); };
     ws.onmessage = function (event) {
         try {

@@ -354,3 +354,7 @@ export class Colors {
     static BgWhite   :string = "\x1b[47m" ;
     static BgGray    :string = "\x1b[100m";
 }
+
+export function printFakeFunction(func:string,parameters:any[]):string {
+    return Colors.FgCyan+func.split(".").join(Colors.FgGray+"."+Colors.FgCyan)+Colors.FgGray+"("+parameters.map((el:any)=>{return ((((typeof el) == "string")?Colors.FgGreen:Colors.FgYellow)+JSON.stringify(el));}).join(Colors.FgGray+", ")+Colors.FgGray+")"+Colors.Reset;
+}
