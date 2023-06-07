@@ -86,7 +86,7 @@ function pingDevices() {
                     }
 
                     if (key.startsWith("web")) { continue; }// if its a browser made device, skip next steps
-                    if (oldDevice.public) console.log(Colors.FgGray+"Device "+Colors.FgGreen+"\"" + oldDevice.name + "\""+Colors.FgGray+" disconnected."+Colors);
+                    if (oldDevice.public) console.log(Colors.FgGray+"Device "+Colors.FgGreen+"\"" + oldDevice.name + "\""+Colors.FgGray+" disconnected."+Colors.Reset);
 
                     //send disconnection subscriptions
                     var DisconnSubs:any = disconnectionSubscriptions[key.toLowerCase()];
@@ -125,7 +125,7 @@ ws.on('connection', (websocket:any) => {
     websocket.on('message', (message:string) => {
         try {
             var msg:cmd = JSON.parse(message);
-            if (msg.type == null) { console.log(Colors.FgGray+"Invalid command:"+Colors.FgRed+" message type is"+Colors.FgCyan+" null"+Colors.FgGray+"."+Colors.Reset); return;}
+            if (msg.type == null) { websocket.send(JSON.stringify({type:"status",status:false,statusCode:401,error:"Command type is null",id:msg.id})); console.log(Colors.FgGray+"Invalid command:"+Colors.FgRed+" message type is"+Colors.FgCyan+" null"+Colors.FgGray+"."+Colors.Reset); return;}
             //find example messages in Lib.ts
             switch(msg.type) {
                 case "connection": {
@@ -269,9 +269,9 @@ ws.on('connection', (websocket:any) => {
                 case "command": {
                     //console.log("command: \n" + message + "\n");
                     if (msg.data != null) {
-                        if (msg.data.device     == null) { console.log(msg); console.log(Colors.FgGray+"Invalid command:"+Colors.FgGray+" Command"+Colors.FgRed+" missing target device"+Colors.FgGray+"."+Colors.Reset); return; }
-                        if (msg.data.function   == null) { console.log(msg); console.log(Colors.FgGray+"Invalid command:"+Colors.FgGray+" Command"+Colors.FgRed+" missing target function"+Colors.FgGray+"."+Colors.Reset); return; }
-                        if (msg.data.parameters == null) { console.log(msg); console.log(Colors.FgGray+"Invalid command:"+Colors.FgGray+" Command"+Colors.FgRed+" missing function parameters"+Colors.FgGray+"."+Colors.Reset); return; }
+                        if (msg.data.device     == null) { console.log(msg); websocket.send(JSON.stringify({type:"status",status:false,statusCode:402,error:"Command device is invalid"    ,id:msg.id})); console.log(Colors.FgGray+"Invalid command:"+Colors.FgGray+" Command"+Colors.FgRed+" missing target device"      +Colors.FgGray+"."+Colors.Reset); return; }
+                        if (msg.data.function   == null) { console.log(msg); websocket.send(JSON.stringify({type:"status",status:false,statusCode:403,error:"Command function is invalid"  ,id:msg.id})); console.log(Colors.FgGray+"Invalid command:"+Colors.FgGray+" Command"+Colors.FgRed+" missing target function"    +Colors.FgGray+"."+Colors.Reset); return; }
+                        if (msg.data.parameters == null) { console.log(msg); websocket.send(JSON.stringify({type:"status",status:false,statusCode:405,error:"Command parameters is invalid",id:msg.id})); console.log(Colors.FgGray+"Invalid command:"+Colors.FgGray+" Command"+Colors.FgRed+" missing function parameters"+Colors.FgGray+"."+Colors.Reset); return; }
 
                         handleCommand(msg as command, websocket);
                     }
@@ -292,9 +292,9 @@ ws.on('connection', (websocket:any) => {
                     }
                     break;
                 }
-                default: { console.log(Colors.FgGray+"Invalid command:"+Colors.FgRed+" Invalid message type"+Colors.FgGreen+" \""+msg.type+"\""+Colors.FgGray+"."+Colors.Reset); }
+                default: { websocket.send(JSON.stringify({type:"status",status:false,statusCode:406,error:"Command type is invalid",id:msg.id})); console.log(Colors.FgGray+"Invalid command:"+Colors.FgRed+" Invalid message type"+Colors.FgGreen+" \""+msg.type+"\""+Colors.FgGray+"."+Colors.Reset); }
             }
-        } catch (err:any) { console.log(message); console.log(Colors.FgGray+"Invalid command:"+Colors.FgRed+" Unable to parse json of message"+Colors.FgGray+"."+Colors.Reset); console.log(err); }
+        } catch (err:any) { websocket.send(JSON.stringify({type:"status",status:false,statusCode:407,error:"Command invalid json",message:err.message})); console.log(Colors.FgGray+"Invalid command:"+Colors.FgRed+" Unable to parse json of message"+Colors.FgGray+"."+Colors.Reset); console.log(message); console.log(err.message); }
     });
 });
 function handleCommand(msg:string|command, websocket?:any) {
@@ -304,16 +304,18 @@ function handleCommand(msg:string|command, websocket?:any) {
             var json:command = JSON.parse(msg) as command;
             if (json != null) {
                 handleCommand(json);
-            } else { console.log(Colors.FgGray+"Invalid command:"+Colors.FgRed+" Command is"+Colors.FgCyan+" null"+Colors.FgGray+"."+Colors.Reset); return; }
+            } else { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:408,error:"Command is null"})); } console.log(Colors.FgGray+"Invalid command:"+Colors.FgRed+" Command is"+Colors.FgCyan+" null"+Colors.FgGray+"."+Colors.Reset); return; }
         } catch (err:any) { console.log(err.stack + "    ln233"); }
     } else if ((typeof msg) == "object"){
         assert(typeof msg == "object")
         if (msg.data.device.split(".")[0].toLowerCase() == "self") {
             var _switch:{[key:string]:Function} = {
-                "authenticate()": function (parameters:[string,string,string|boolean]) { //used for web execution page
-                    if (parameters.length < 2                       ) { console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.authenticate"          ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return; }
-                    if (parameters[0] == null || parameters[0] == "") { console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.authenticate"          ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return; }
-                    if (parameters[1] == null || parameters[1] == "") { console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.authenticate"          ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return; }
+                "authenticate()": function (parameters:[string,string,string|boolean]) {// used for web execution page
+                    if (parameters.length < 2                       ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:409,error:"self.authenticate parameters are invalid",id:msg.id}));     } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.authenticate",parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
+                    if (parameters[0] == null || parameters[0] == "") { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:410,error:"self.authenticate \"username\" is invalid",id:msg.id}));     } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.authenticate",parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
+                    if (parameters[1] == null || parameters[1] == "") { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:411,error:"self.authenticate \"password\" is invalid",id:msg.id})); } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.authenticate",parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
+                    if ((typeof parameters[0]) != "string"          ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:410,error:"self.authenticate \"username\" is invalid",id:msg.id}));     } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.authenticate",parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
+                    if ((typeof parameters[1]) != "string"          ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:411,error:"self.authenticate \"password\" is invalid",id:msg.id})); } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.authenticate",parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
                     let validAccount:boolean = false
                     for (let i = 0; i < Accounts.length; i++) {
                         if (Accounts[i].username == parameters[0] && Accounts[i].password == parameters[1]) {
@@ -333,7 +335,7 @@ function handleCommand(msg:string|command, websocket?:any) {
                             string = hints[Math.round(Math.random()*(hints.length-1))];
                         }
                         websocket.send(JSON.stringify({type:"authentication",status:false,data:string, id:msg.id}));
-                        return
+                        false
                     }
 
                     //login is valid
@@ -384,22 +386,29 @@ function handleCommand(msg:string|command, websocket?:any) {
                     } else {
                         websocket.send(JSON.stringify({type:"authentication", status:true, data:devicesClone, id:msg.id}))
                     }
+                    return true;
                 },
                 "callback()": function (parameters:Array<number|string>) {
-                    if (parameters.length < 2                       ) { console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.callback"              ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return; }
-                    if (parameters[0] == null || parameters[0] == "") { console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.callback"              ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return; }
+                    if (parameters.length < 2                       ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:412,error:"self.callback not enough parameters",id:msg.id}));    } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.callback",parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
+                    if (parameters[0] == null || parameters[0] == "") { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:413,error:"self.callback \"callback\" is invalid",id:msg.id}));  } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.callback",parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
+                    if (parameters[1] == null || parameters[1] == "") { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:414,error:"self.callback \"returnVal\" is invalid",id:msg.id})); } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.callback",parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
+
                     var callbackNum:number = Number(parameters[0]);
-                    if (Number.isNaN(callbackNum)                   ) { console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.callback"              ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return; }
-                    if (parameters[1] == null || parameters[1] == "") { console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.callback"              ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return; }
+                    if (Number.isNaN(callbackNum)                   ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:415,error:"self.callback \"callback\" is invalid",id:msg.id}));  } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.callback",parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
+                    if ((typeof parameters[1]) != "string"          ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:416,error:"self.callback \"returnVal\" is invalid",id:msg.id})); } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.callback",parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
 
                     callbacks[callbackNum](parameters[1],callbackNum);
                     delete callbacks[callbackNum];
+                    return true;
                 },
                 "subscribeconnection()": function (parameters:[string,string,string]) {
-                    if (parameters.length < 3                       ) { console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.subscribeconnection"   ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return; }
-                    if (parameters[0] == null || parameters[0] == "") { console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.subscribeconnection"   ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return; }
-                    if (parameters[1] == null || parameters[1] == "") { console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.subscribeconnection"   ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return; }
-                    if (parameters[2] == null || parameters[2] == "") { console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.subscribeconnection"   ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return; }
+                    if (parameters.length < 3                       ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:417,error:"self.subscribeconnection not enough parameters",id:msg.id}));               } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.subscribeconnection"   ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
+                    if (parameters[0] == null || parameters[0] == "") { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:418,error:"self.subscribeconnection \"deviceName\" is invalid",id:msg.id}));           } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.subscribeconnection"   ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
+                    if (parameters[1] == null || parameters[1] == "") { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:419,error:"self.subscribeconnection \"callbackDeviceName\" is invalid",id:msg.id}));   } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.subscribeconnection"   ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
+                    if (parameters[2] == null || parameters[2] == "") { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:420,error:"self.subscribeconnection \"callbackFunctionName\" is invalid",id:msg.id})); } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.subscribeconnection"   ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
+                    if ((typeof parameters[0]) != "string"          ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:418,error:"self.subscribeconnection \"deviceName\" is invalid",id:msg.id}));           } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.subscribeconnection"   ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
+                    if ((typeof parameters[1]) != "string"          ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:419,error:"self.subscribeconnection \"callbackDeviceName\" is invalid",id:msg.id}));   } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.subscribeconnection"   ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
+                    if ((typeof parameters[2]) != "string"          ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:420,error:"self.subscribeconnection \"callbackFunctionName\" is invalid",id:msg.id})); } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.subscribeconnection"   ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
 
                     const deviceName = parameters[0].toLowerCase();
                     if (websockets[deviceName] == null) {
@@ -408,16 +417,21 @@ function handleCommand(msg:string|command, websocket?:any) {
                     } else {// device is already connected
                         handleCommand(JSON.parse("{\"type\":\"command\",\"data\":{\"device\":\"" + parameters[1] + "\",\"function\":\"" + parameters[2] + "\",\"parameters\":[\"" + parameters[0] + "\"]}}"));
                     }
+                    return true;
                 },
                 "subscribedisconnection()": function (parameters:[string,string,string]) {
-                    if (parameters.length < 3                       ) { console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.subscribedisconnection"   ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return; }
-                    if (parameters[0] == null || parameters[0] == "") { console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.subscribedisconnection"   ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return; }
-                    if (parameters[1] == null || parameters[1] == "") { console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.subscribedisconnection"   ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return; }
-                    if (parameters[2] == null || parameters[2] == "") { console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.subscribedisconnection"   ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return; }
+                    if (parameters.length < 3                       ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:421,error:"self.subscribedisconnection not enough parameters",id:msg.id}));               } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.subscribedisconnection"   ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
+                    if (parameters[0] == null || parameters[0] == "") { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:422,error:"self.subscribedisconnection \"deviceName\" is invalid",id:msg.id}));           } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.subscribedisconnection"   ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
+                    if (parameters[1] == null || parameters[1] == "") { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:423,error:"self.subscribedisconnection \"callbackDeviceName\" is invalid",id:msg.id}));   } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.subscribedisconnection"   ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
+                    if (parameters[2] == null || parameters[2] == "") { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:424,error:"self.subscribedisconnection \"callbackFunctionName\" is invalid",id:msg.id})); } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.subscribedisconnection"   ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
+                    if ((typeof parameters[0]) != "string"          ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:422,error:"self.subscribedisconnection \"deviceName\" is invalid",id:msg.id}));           } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.subscribedisconnection"   ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
+                    if ((typeof parameters[1]) != "string"          ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:423,error:"self.subscribedisconnection \"callbackDeviceName\" is invalid",id:msg.id}));   } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.subscribedisconnection"   ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
+                    if ((typeof parameters[2]) != "string"          ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:424,error:"self.subscribedisconnection \"callbackFunctionName\" is invalid",id:msg.id})); } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.subscribedisconnection"   ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
 
                     const deviceName = parameters[0].toLowerCase();
                     disconnectionSubscriptions[deviceName] = disconnectionSubscriptions[deviceName]||[];
                     disconnectionSubscriptions[deviceName].push([parameters[1],parameters[2]]);
+                    return true;
                 }
             }
             Object.keys(localdevices).forEach((i) => {
@@ -425,26 +439,28 @@ function handleCommand(msg:string|command, websocket?:any) {
                 _switch = temp;
             });
             
-            var nm:string = (msg.data.device.includes(".") ? ((msg.data.device.substring(5)).toLowerCase()+".") : "") + msg.data.function.toLowerCase() + "()"
-            if (_switch[nm] != null) {
-                _switch[nm](msg.data.parameters, websocket);
-            } else { console.log(Colors.FgGray+"Invalid command:"+Colors.FgRed+" Command"+Colors.FgGreen+" \""+nm+"\""+Colors.FgRed+" not found"+Colors.FgGray+"."+Colors.Reset); return; }
+            var nm:string = (msg.data.device.includes(".") ? ((msg.data.device.substring(5)).toLowerCase()+".") : "") + msg.data.function.toLowerCase();
+            if (_switch[nm+"()"] != null) {
+                var out:boolean = _switch[nm+"()"](msg.data.parameters, websocket,msg.id);
+                if (out) websocket.send(JSON.stringify({type:"status",status:true,statusCode:200,id:msg.id}));
+            } else { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:425,error:"Function \""+nm+"\" not found",id:msg.id})); } console.log(Colors.FgGray+"Invalid command:"+Colors.FgRed+" Function"+Colors.FgGreen+" \""+nm+"\""+Colors.FgRed+" not found"+Colors.FgGray+"."+Colors.Reset); return; }
         } else {
-            var lst:Array<boolean|string|{[key:string]:string}> = findFunction(devices,msg.data);
-            if (lst[0] != false) {
-                if (websockets[websocket] != null) {// console.log("sent:  " + message);
-                    websocket = lst[0];
+            const out:([boolean]|[string,string]) = findFunction(devices,msg.data,websocket) as ([boolean]|[string,string]);
+            if (out[0] != false) {
+                const lst = out as [string,string];
+                if (websockets[lst[0]] != null) {// console.log("sent: " + message);
                     assertIsString(lst[1]);
                     var message:string = lst[1];
-                    websockets[websocket].send(message);
+                    websockets[lst[0]].send(message);
+                    if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:true,statusCode:200,id:msg.id})); }
                 } else {
-                    console.log(Colors.FgGray+"Invalid command:"+Colors.FgRed+" Device"+Colors.FgGreen+" \""+websocket+"\""+Colors.FgRed+" not connected"+Colors.FgGray+"."+Colors.Reset);
+                    if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:426,error:"Device \""+lst[0]+"\" not connected",id:msg.id})); } console.log(Colors.FgGray+"Invalid command:"+Colors.FgRed+" Device"+Colors.FgGreen+" \""+lst[0]+"\""+Colors.FgRed+" not connected"+Colors.FgGray+"."+Colors.Reset);
                 }
             } else console.log(msg.data);
         }
     } else { console.log(Colors.FgGray+"Internal error:"+Colors.FgYellow+" Message"+Colors.FgRed+" is not an object"+Colors.FgGray+"."+Colors.Reset); }
 }
-function findFunction(list:{[key:string]:Device|null},data:cmdData,type?:number) : Array<boolean|string|{[key:string]:string}>{
+function findFunction(list:{[key:string]:Device|null},data:cmdData,websocket:any,type?:number) : ([boolean]|[{[key:string]:string|Array<string|number|boolean|null>}]|[string,string]){
     if (list != null && (typeof list) == "object" && !Array.isArray(list) && data != null) {
         var deviceName:string = data.device;
         if (!data.device.includes(".")) {
@@ -466,7 +482,7 @@ function findFunction(list:{[key:string]:Device|null},data:cmdData,type?:number)
                     if (data.parameters[i] == null || data.parameters[i] == "null") {
                         if (funcParams[i].nullable == true) {
                             if (data.parameters[i] == "null") { data.parameters[i] = null; } continue;// valid
-                        } else { condition = false; failIndex=i; got="null"; break; } // invalid
+                        } else { condition = false; failIndex=i; got=Colors.FgCyan+"null"; break; } // invalid
                     } else if ((typeof data.parameters[i]) == "number" || (typeof data.parameters[i]) == "bigint") {
                         if (funcParams[i].type == "number") continue;// valid
                         else { condition = false; failIndex=i; got="number"; break; } // invalid
@@ -488,23 +504,24 @@ function findFunction(list:{[key:string]:Device|null},data:cmdData,type?:number)
                                 }
                             } catch (err:any) { condition = false; failIndex=i; got="error"; break; }// invalid
                         }
-                    }
+                    } else { condition = false; failIndex=i; got=Colors.FgCyan+"other"; break; } // invalid
                 }
                 if (!condition) {
+                    if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:427,error:"Found function but parameter types do not match",id:data.id})); }
                     console.log(Colors.FgGray+"Invalid command:"+Colors.Reset+" Found function but"+Colors.FgRed+" parameter types do not match"+Colors.FgGray+"."+Colors.Reset);
                     console.log(Colors.FgGray+"parameter"+Colors.FgYellow+"#"+failIndex+Colors.FgGray+", expected "+Colors.FgGreen+type+Colors.FgGray+" but got "+Colors.FgGreen+got+Colors.FgGray+"."+Colors.Reset);
                     return [false];
                 }
                 if (type == 2) {
-                    return [{ type : "command", data : data.function + "()", "parameters" : JSON.stringify(data.parameters) }];
+                    return [{ type : "command", data : data.function + "()", "parameters" : data.parameters }];
                 } else if (type == null || type == 1) {
-                    return [deviceName.toLowerCase(), "{\"type\":\"command\",\"data\":\"" + data.function + "()\", \"parameters\":" + JSON.stringify(data.parameters) + "}"];
+                    return [deviceName.toLowerCase(), JSON.stringify({ type : "command", data : data.function + "()", "parameters" : data.parameters })];
                 }
             } else {
                 if (device == null) {
-                    console.log(Colors.FgGray+"Invalid command:"+Colors.FgRed+" Device"+Colors.FgGreen+" \""+deviceName+"\""+Colors.FgRed+" not found"+Colors.FgGray+"."+Colors.Reset);
+                    if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:428,error:"Device \""+deviceName+"\" not found",id:data.id}));      } console.log(Colors.FgGray+"Invalid command:"+Colors.FgRed+" Device"+Colors.FgGreen+" \""+deviceName+"\""+Colors.FgRed+" not found"+Colors.FgGray+"."+Colors.Reset);
                 } else if (Object.keys(device.functions).length <= 0 || device.functions[data.function.toLowerCase()] == null) {
-                    console.log(Colors.FgGray+"Invalid command:"+Colors.FgRed+" Device"+Colors.FgGreen+" \""+deviceName+"\""+Colors.FgRed+" does not contain function"+Colors.FgGreen+" \"" + data.function + "\""+Colors.FgGray+"."+Colors.Reset);
+                    if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:429,error:"Function \""+data.function+"\" not found",id:data.id})); } console.log(Colors.FgGray+"Invalid command:"+Colors.FgRed+" Device"+Colors.FgGreen+" \""+deviceName+"\""+Colors.FgRed+" does not contain function"+Colors.FgGreen+" \"" + data.function + "\""+Colors.FgGray+"."+Colors.Reset);
                 }
                 return [false];
             }
@@ -513,7 +530,7 @@ function findFunction(list:{[key:string]:Device|null},data:cmdData,type?:number)
             const deviceNameSplit:string[] = deviceName.split(".");
             var shift:string = deviceNameSplit.shift()!.toLowerCase();//get string between beginning and first dot
             if (list[shift] != null && Object.keys(list[shift]!.devices!).length > 0) {
-                var out:boolean|string|{[key:string]:string} = findFunction(list[shift]!.devices!, {device:deviceNameSplit.join("."),function:data.function,parameters:data.parameters}, 2)[0];
+                var out:(string|boolean|{[key:string]:string|Array<string|number|boolean|null>}) = findFunction(list[shift]!.devices!, {device:deviceNameSplit.join("."),function:data.function,parameters:data.parameters},websocket, 2)[0];
                 if (out != false) {
                     const message:{[key:string]:string} = out as {[key:string]:string};
                     assertIsObject(message);
@@ -524,9 +541,9 @@ function findFunction(list:{[key:string]:Device|null},data:cmdData,type?:number)
                 }
             } else {
                 if (list[shift] == null) {
-                    console.log(Colors.FgGray+"Invalid command:"+Colors.FgRed+" Device"+Colors.FgGreen+" \""+shift+"\""+Colors.FgRed+" not found"+Colors.FgGray+"."+Colors.Reset);
+                    if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:428,error:"Device \""+shift+"\" not found",id:data.id}));                        } console.log(Colors.FgGray+"Invalid command:"+Colors.FgRed+" Device"+Colors.FgGreen+" \""+shift+"\""+Colors.FgRed+" not found"+Colors.FgGray+"."+Colors.Reset);
                 } else if (Object.keys(list[shift]!.devices!).length <= 0) {
-                    console.log(Colors.FgGray+"Invalid command:"+Colors.FgRed+" Device"+Colors.FgGreen+" \""+shift+"\""+Colors.FgRed+" does not have child devices"+Colors.FgGray+"."+Colors.Reset);
+                    if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:430,error:"Device does not have child \""+deviceNameSplit[0]+"\"",id:data.id})); } console.log(Colors.FgGray+"Invalid command:"+Colors.FgRed+" Device"+Colors.FgGreen+" \""+shift+"\""+Colors.FgRed+" does not have child devices"+Colors.FgGray+"."+Colors.Reset);
                 } else {
                     console.log("weird error ln531");
                 }
@@ -584,38 +601,71 @@ var localdevices:{ [key:string]:LocalDevice } = {
         functions:{
             "spotify.authenticate()": function (parameters:null, websocket:any) {
                 websocket.send("{\"type\":\"redirect\",\"data\":\"" + Spotify.Link + "\"}");
+                return true;
             },
-            "spotify.play()"        : function (parameters:Array<string>) {
+            "spotify.play()"        : function (parameters:Array<string>,websocket:any,id:string|number|null) {
+                if (parameters.length < 2                                      ) {if(websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:431,error:"Found function but parameters do not match","id":id}));    } return false; }
+                if (parameters[0] == null || (typeof parameters[0]) != "string") {if(websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:432,error:"Found function but parameter types do not match","id":id}));    } return false; }
+                if (parameters[1] == null || (typeof parameters[1]) != "string") {if(websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:432,error:"Found function but parameter types do not match","id":id}));    } return false; }
                 Spotify.SpotifyPlay        (parameters[0]          ,null,parameters[1])
                 .then((val:boolean) => {}).catch((err:number) => {});
+                return true;
             },
-            "spotify.pause()"       : function (parameters:Array<string>) {
+            "spotify.pause()"       : function (parameters:Array<string>,websocket:any,id:string|number|null) {
+                if (parameters.length < 1                                      ) {if(websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:433,error:"Found function but parameters do not match","id":id}));    } return false; }
+                if (parameters[0] == null || (typeof parameters[0]) != "string") {if(websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:434,error:"Found function but parameter types do not match","id":id}));    } return false; }
                 Spotify.SpotifyPause       (                             parameters[0])
                 .then((val:boolean) => {}).catch((err:number) => {});
+                return true;
             },
-            "spotify.skipnext()"    : function (parameters:Array<string>) {
+            "spotify.skipnext()"    : function (parameters:Array<string>,websocket:any,id:string|number|null) {
+                if (parameters.length < 1                                      ) {if(websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:435,error:"Found function but parameters do not match","id":id}));    } return false; }
+                if (parameters[0] == null || (typeof parameters[0]) != "string") {if(websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:436,error:"Found function but parameter types do not match","id":id}));    } return false; }
                 Spotify.SpotifySkipNext    (                        null,parameters[0])
                 .then((val:boolean) => {}).catch((err:number) => {});
+                return true;
             },
-            "spotify.skipprevious()": function (parameters:Array<string>) {
+            "spotify.skipprevious()": function (parameters:Array<string>,websocket:any,id:string|number|null) {
+                if (parameters.length < 1                                      ) {if(websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:437,error:"Found function but parameters do not match","id":id}));    } return false; }
+                if (parameters[0] == null || (typeof parameters[0]) != "string") {if(websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:438,error:"Found function but parameter types do not match","id":id}));    } return false; }
                 Spotify.SpotifySkipPrevious(                        null,parameters[0])
                 .then((val:boolean) => {}).catch((err:number) => {});
+                return true;
             },
-            "spotify.toggle()"      : function (parameters:Array<string>) {
+            "spotify.toggle()"      : function (parameters:Array<string>,websocket:any,id:string|number|null) {
+                if (parameters.length < 1                                      ) {if(websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:439,error:"Found function but parameters do not match","id":id}));    } return false; }
+                if (parameters[0] == null || (typeof parameters[0]) != "string") {if(websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:440,error:"Found function but parameter types do not match","id":id}));    } return false; }
                 Spotify.SpotifyToggle      (                        null,parameters[0])
                 .then((val:boolean) => {}).catch((err:number) => {});
+                return true;
             },
-            "spotify.volumeup()"    : function (parameters:Array<string>) {
-                Spotify.SpotifyVolumeUp    (parseInt(parameters[0]),null,parameters[1])
+            "spotify.volumeup()"    : function (parameters:Array<string|number>,websocket:any,id:string|number|null) {
+                if (parameters.length < 2                                      ) {if(websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:441,error:"Found function but parameters do not match","id":id}));    } return false; }
+                if (parameters[1] == null || (typeof parameters[1]) != "string") {if(websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:442,error:"Found function but parameter types do not match","id":id}));    } return false; }
+                if (parameters[0] == null                                      ) {if(websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:442,error:"Found function but parameter types do not match","id":id}));    } return false; }
+                if ((typeof parameters[0]) == "string") { try{parameters[0]=parseFloat(parameters[0]as string);}catch(err:any){if(websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:442,error:"Found function but parameter types do not match","id":id}));    } return false; } }
+                if ((typeof parameters[0]) != "number") {if(websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:442,error:"Found function but parameter types do not match","id":id}));    } return false; }
+                Spotify.SpotifyVolumeUp    (parameters[0] as number,null,parameters[1] as string)
                 .then((           ) => {}).catch((err:number) => {});
+                return true;
             },
-            "spotify.volumedown()"  : function (parameters:Array<string>) {
-                Spotify.SpotifyVolumeDown  (parseInt(parameters[0]),null,parameters[1])
+            "spotify.volumedown()"  : function (parameters:Array<string|number>,websocket:any,id:string|number|null) {
+                if (parameters.length < 2                                      ) {if(websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:443,error:"Found function but parameters do not match","id":id}));    } return false; }
+                if (parameters[1] == null || (typeof parameters[1]) != "string") {if(websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:444,error:"Found function but parameter types do not match","id":id}));    } return false; }
+                if ((typeof parameters[0]) == "string") { try{parameters[0]=parseFloat(parameters[0]as string);}catch(err:any){if(websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:444,error:"Found function but parameter types do not match","id":id}));    } return false; } }
+                if ((typeof parameters[0]) != "number") {if(websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:444,error:"Found function but parameter types do not match","id":id}));    } return false; }
+                Spotify.SpotifyVolumeDown  (parameters[0] as number,null,parameters[1] as string)
                 .then((           ) => {}).catch((err:number) => {});
+                return true;
             },
-            "spotify.setvolume()"  : function (parameters:Array<string>) {
-                Spotify.SpotifySetVolume   (parseInt(parameters[0]),null,parameters[1])
+            "spotify.setvolume()"  : function (parameters:Array<string|number>,websocket:any,id:string|number|null) {
+                if (parameters.length < 2                                      ) {if(websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:445,error:"Found function but parameters do not match","id":id}));    } return false; }
+                if (parameters[1] == null || (typeof parameters[1]) != "string") {if(websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:446,error:"Found function but parameter types do not match","id":id}));    } return false; }
+                if ((typeof parameters[0]) == "string") { try{parameters[0]=parseFloat(parameters[0]as string);}catch(err:any){if(websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:446,error:"Found function but parameter types do not match","id":id}));    } return false; } }
+                if ((typeof parameters[0]) != "number") {if(websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:446,error:"Found function but parameter types do not match","id":id}));    } return false; }
+                Spotify.SpotifySetVolume   (parameters[0] as number,null,parameters[1] as string)
                 .then((           ) => {}).catch((err:number) => {});
+                return true;
             }
         },
         "Rest":{

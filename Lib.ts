@@ -146,7 +146,8 @@ export interface Device{
 export interface cmdData{
     device:string,
     function:string,
-    parameters:Array<string|boolean|number|null>
+    parameters:Array<string|boolean|number|null>,
+    id?:string|number;
 }
 /**
  * Interface used the represent data from a connection.
