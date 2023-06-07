@@ -86,7 +86,7 @@ function pingDevices() {
                     }
 
                     if (key.startsWith("web")) { continue; }// if its a browser made device, skip next steps
-                    if (oldDevice.public) console.log(Colors.FgGray+"Device "+Colors.FgGreen+"\"" + oldDevice.name + "\""+Colors.FgGray+" disconnected."+Colors.Reset);
+                    if (oldDevice.public) console.log(Colors.FgGr+"Device "+Colors.FgGre+"\"" + oldDevice.name + "\""+Colors.FgGr+" disconnected."+Colors.R);
 
                     //send disconnection subscriptions
                     var DisconnSubs:any = disconnectionSubscriptions[key.toLowerCase()];
@@ -115,7 +115,7 @@ function pingDevices() {
 
 const socketport:number = 42069;
 var ws:any = new WebSocket.Server({ "port": socketport })
-console.log(Colors.FgGray+"Websocket api is running at ws://"+ getIp() +Colors.FgGray+":"+Colors.FgYellow+ socketport +Colors.Reset);
+console.log(Colors.FgGr+"Websocket api is running at ws://"+ getIp() +Colors.FgGr+":"+Colors.FgYe+ socketport +Colors.R);
 setInterval(() => {
     pingDevices();//ping devices
 }, 30*1000);//30 seconds
@@ -125,7 +125,7 @@ ws.on('connection', (websocket:any) => {
     websocket.on('message', (message:string) => {
         try {
             var msg:cmd = JSON.parse(message);
-            if (msg.type == null) { websocket.send(JSON.stringify({type:"status",status:false,statusCode:401,error:"Command type is null",id:msg.id})); console.log(Colors.FgGray+"Invalid command:"+Colors.FgRed+" message type is"+Colors.FgCyan+" null"+Colors.FgGray+"."+Colors.Reset); return;}
+            if (msg.type == null) { websocket.send(JSON.stringify({type:"status",status:false,statusCode:401,error:"Command type is null",id:msg.id})); console.log(Colors.FgGr+"Invalid command:"+Colors.FgRe+" message type is"+Colors.FgCy+" null"+Colors.FgGr+"."+Colors.R); return;}
             //find example messages in Lib.ts
             switch(msg.type) {
                 case "connection": {
@@ -134,38 +134,48 @@ ws.on('connection', (websocket:any) => {
                     var connected:boolean = false;
                     if (msg.data != null && msg.data.name != null) {
                         function mapDevice(device:any, parentName?:string|null) {
+                            const DisplayName:string = ((parentName!=null)?(parentName+"."):(""))+device.name;
+                            const DisplayNameColor:string = ((parentName!=null)?(Colors.FgCy+parentName+Colors.FgGr+"."):(""))+Colors.FgCy+device.name;
                             var newDevice:any = {};
-                            if ((typeof device.name) != "string") { console.log(Colors.FgGray+"invalid connection: "+((parentName!=null)?(Colors.FgCyan+parentName+Colors.FgGray+"."+Colors.Reset):(""))+Colors.FgCyan+"device"+Colors.FgGray+"."+Colors.Reset+Colors.FgCyan+"name "+Colors.FgRed+"is not a string"+Colors.FgGray+"."+Colors.Reset); return false; }
+                            if ((typeof device.name) != "string") { websocket.send(JSON.stringify({type:"reply",reply:false,statusCode:401,error:"device.name is not a string.",id:msg.id})); console.log(Colors.FgGr+"invalid connection: "+((parentName!=null)?(Colors.FgCy+parentName+Colors.FgGr+"."):(""))+Colors.FgCy+"device"+Colors.FgGr+"."+Colors.FgCy+"name "+Colors.FgRe+"is not a string"+Colors.FgGr+"."+Colors.R); return false; }
                             newDevice.name   = device.name;
                             try { if ((typeof device.public) == "string") device.public = JSON.parse(device.public);
-                            } catch (err:any) { console.log(Colors.FgGray+"invalid connection: "+((parentName!=null)?(Colors.FgCyan+parentName+Colors.FgGray+"."+Colors.Reset):(""))+Colors.FgCyan+newDevice.name+Colors.FgGray+"."+Colors.Reset+Colors.FgCyan+"public "+Colors.FgRed+"is not a boolean"+Colors.FgGray+"."+Colors.Reset); return false; }
-                            if ((typeof device.public) != "boolean" && device.public != null) { console.log(Colors.FgGray+"invalid connection: "+((parentName!=null)?(Colors.FgCyan+parentName+Colors.FgGray+"."+Colors.Reset):(""))+Colors.FgCyan+newDevice.name+Colors.FgGray+"."+Colors.Reset+Colors.FgCyan+"public "+Colors.FgRed+"is not a boolean"+Colors.FgGray+"."+Colors.Reset); return false; }
+                            } catch (err:any) { websocket.send(JSON.stringify({type:"reply",reply:false,statusCode:402,error:(((parentName!=null)?(parentName+"."):(""))+newDevice.name+".public is not a boolean."),id:msg.id})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.FgCy+"public"+Colors.FgRe+" is not a boolean"+Colors.FgGr+"."+Colors.R); return false; }
+                            if ((typeof device.public) != "boolean" && device.public != null) { websocket.send(JSON.stringify({type:"reply",reply:false,statusCode:403,error:(((parentName!=null)?(parentName+"."):(""))+newDevice.name+".public is not a boolean."),id:msg.id})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.FgCy+"public "+Colors.FgRe+"is not a boolean"+Colors.FgGr+"."+Colors.R); return false; }
                             newDevice.public = ((device.public!=null)?device.public:true);
 
                             if (device.functions != null) {
-                                if ((typeof device.functions) != "object") { console.log(Colors.FgGray+"invalid connection: "+((parentName!=null)?(Colors.FgCyan+parentName+Colors.FgGray+"."+Colors.Reset):(""))+Colors.FgCyan+newDevice.name+Colors.FgGray+"."+Colors.Reset+Colors.FgCyan+"functions "+Colors.FgRed+"is not an object"+Colors.FgGray+"."+Colors.Reset); return false; }
+                                if ((typeof device.functions) != "object") { websocket.send(JSON.stringify({type:"reply",reply:false,statusCode:405,error:(DisplayName+".functions is not an object."),id:msg.id})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.FgCy+"functions "+Colors.FgRe+"is not an object"+Colors.FgGr+"."+Colors.R); return false; }
                                 newDevice.functions = {};
                                 function mapParameters(param:any,funcIndex:number|string,index:number) {
-                                    if ((typeof param.name) != "string") { console.log(Colors.FgGray+"invalid connection: "+((parentName!=null)?(Colors.FgCyan+parentName+Colors.FgGray+"."+Colors.Reset):(""))+Colors.FgCyan+newDevice.name+Colors.FgGray+"."+Colors.Reset+Colors.FgCyan+"functions"+(((typeof funcIndex) == "number")?(Colors.FgGray+"["+Colors.FgYellow+funcIndex+Colors.FgGray+"]"):(Colors.FgGray+"["+Colors.FgGreen+"\""+funcIndex+"\""+Colors.FgGray+"]"))+Colors.FgGray+"."+Colors.Reset+Colors.FgCyan+"parameters"+Colors.FgGray+"["+Colors.FgYellow+index+Colors.FgGray+"]."+Colors.FgCyan+"name "+Colors.FgRed+"is not a string"+Colors.FgGray+"."+Colors.Reset); return false; }
-                                    if ((typeof param.type) != "string") { console.log(Colors.FgGray+"invalid connection: "+((parentName!=null)?(Colors.FgCyan+parentName+Colors.FgGray+"."+Colors.Reset):(""))+Colors.FgCyan+newDevice.name+Colors.FgGray+"."+Colors.Reset+Colors.FgCyan+"functions"+(((typeof funcIndex) == "number")?(Colors.FgGray+"["+Colors.FgYellow+funcIndex+Colors.FgGray+"]"):(Colors.FgGray+"["+Colors.FgGreen+"\""+funcIndex+"\""+Colors.FgGray+"]"))+Colors.FgGray+"."+Colors.Reset+Colors.FgCyan+"parameters"+Colors.FgGray+"["+Colors.FgYellow+index+Colors.FgGray+"]."+Colors.FgCyan+"type "+Colors.FgRed+"is not a string"+Colors.FgGray+"."+Colors.Reset); return false; }
+                                    const DisplayName:string = ((parentName!=null)?(parentName+"."):(""))+newDevice.name+".functions["+(((typeof funcIndex)=="number")?(funcIndex):("\""+funcIndex+"\""))+"].parameters["+index+"]";
+                                    const DisplayNameColor:string = ((parentName!=null)?(Colors.FgCy+parentName+Colors.FgGr+"."):(""))+Colors.FgCy+newDevice.name+Colors.FgGr+"."+Colors.FgCy+"functions"+Colors.FgGr+"["+(((typeof funcIndex)=="number")?(Colors.FgYe+funcIndex):(Colors.FgGre+"\""+funcIndex+"\""))+Colors.FgGr+"]"+Colors.FgGr+"."+Colors.FgCy+"parameters"+Colors.FgGr+"["+Colors.FgYe+index+Colors.FgGr+"]"+Colors.R;
+
+                                    if ((typeof param.name) != "string") { websocket.send(JSON.stringify({type:"reply",reply:false,statusCode:406,error:(DisplayName+".name is not a string."),id:msg.id})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.FgCy+"name "+Colors.FgRe+"is not a string"+Colors.FgGr+"."+Colors.R); return false; }
+                                    if ((typeof param.type) != "string") { websocket.send(JSON.stringify({type:"reply",reply:false,statusCode:407,error:(DisplayName+".type is not a string."),id:msg.id})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.FgCy+"type "+Colors.FgRe+"is not a string"+Colors.FgGr+"."+Colors.R); return false; }
                                     param.type = param.type.toLowerCase();
-                                    if (param.type != "string" && param.type != "number" && param.type != "bool" && param.type != "boolean") { console.log(Colors.FgGray+"invalid connection: "+((parentName!=null)?(Colors.FgCyan+parentName+Colors.FgGray+"."+Colors.Reset):(""))+Colors.FgCyan+newDevice.name+Colors.FgGray+"."+Colors.Reset+Colors.FgCyan+"functions"+(((typeof funcIndex) == "number")?(Colors.FgGray+"["+Colors.FgYellow+funcIndex+Colors.FgGray+"]"):(Colors.FgGray+"["+Colors.FgGreen+"\""+funcIndex+"\""+Colors.FgGray+"]"))+Colors.FgGray+"."+Colors.Reset+Colors.FgCyan+"parameters"+Colors.FgGray+"["+Colors.FgYellow+index+Colors.FgGray+"]."+Colors.FgCyan+"type "+Colors.FgRed+"is not a valid type"+Colors.FgGray+"."+Colors.Reset); return false; }
+                                    if (param.type != "string" && param.type != "number" && param.type != "bool" && param.type != "boolean") { websocket.send(JSON.stringify({type:"reply",reply:false,statusCode:408,error:(DisplayName+".type is not a valid type."),id:msg.id})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.FgCy+"type "+Colors.FgRe+"is not a valid type"+Colors.FgGr+"."+Colors.R); return false; }
                                     try { if ((typeof param.nullable) == "string") param.nullable = JSON.parse(param.nullable);
-                                    } catch (err:any) { console.log(Colors.FgGray+"invalid connection: "+((parentName!=null)?(Colors.FgCyan+parentName+Colors.FgGray+"."+Colors.Reset):(""))+Colors.FgCyan+newDevice.name+Colors.FgGray+"."+Colors.Reset+Colors.FgCyan+"functions"+(((typeof funcIndex) == "number")?(Colors.FgGray+"["+Colors.FgYellow+funcIndex+Colors.FgGray+"]"):(Colors.FgGray+"["+Colors.FgGreen+"\""+funcIndex+"\""+Colors.FgGray+"]"))+Colors.FgGray+"."+Colors.Reset+Colors.FgCyan+"parameters"+Colors.FgGray+"["+Colors.FgYellow+index+Colors.FgGray+"]."+Colors.FgCyan+"nullable "+Colors.FgRed+"is not a boolean"+Colors.FgGray+"."+Colors.Reset); return false; }
-                                    if ((typeof param.nullable) != "boolean") { console.log(Colors.FgGray+"invalid connection: "+((parentName!=null)?(Colors.FgCyan+parentName+Colors.FgGray+"."+Colors.Reset):(""))+Colors.FgCyan+newDevice.name+Colors.FgGray+"."+Colors.Reset+Colors.FgCyan+"functions"+(((typeof funcIndex) == "number")?(Colors.FgGray+"["+Colors.FgYellow+funcIndex+Colors.FgGray+"]"):(Colors.FgGray+"["+Colors.FgGreen+"\""+funcIndex+"\""+Colors.FgGray+"]"))+Colors.FgGray+"."+Colors.Reset+Colors.FgCyan+"parameters"+Colors.FgGray+"["+Colors.FgYellow+index+Colors.FgGray+"]."+Colors.FgCyan+"nullable "+Colors.FgRed+"is not a boolean"+Colors.FgGray+"."+Colors.Reset); return false; }
-                                    var out:any = {"name":param.name,"type":param.type,"nullable":param.nullable||false}
+                                    } catch (err:any) { websocket.send(JSON.stringify({type:"reply",reply:false,statusCode:409,error:(DisplayName+".nullable is not a boolean."),id:msg.id})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.FgCy+"nullable "+Colors.FgRe+"is not a boolean"+Colors.FgGr+"."+Colors.R); return false; }
+                                    if ((typeof param.nullable) != "boolean" && param.nullable != null) { websocket.send(JSON.stringify({type:"reply",reply:false,statusCode:410,error:(DisplayName+".nullable is not a boolean."),id:msg.id})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.FgCy+"nullable "+Colors.FgRe+"is not a boolean"+Colors.FgGr+"."+Colors.R); return false; }
+                                    //TEST THIS
+                                    
+                                    var out:any = {"name":param.name,"type":param.type,"nullable":((param.nullable!=null)?param.nullable:true)}
                                     if (param.defaultValue != null) out.defaultValue = param.defaultValue;
                                     return out;
                                 }
                                 function mapFunction(func:any,index:number|string) {
+                                    const DisplayName:string = ((parentName!=null)?(parentName+"."):(""))+newDevice.name+".functions["+(((typeof index) == "number")?(index):("\""+index+"\""))+"]";
+                                    const DisplayNameColor:string = ((parentName!=null)?(Colors.FgCy+parentName+Colors.FgGr+"."):(""))+Colors.FgCy+newDevice.name+Colors.FgGr+"."+Colors.FgCy+"functions"+(((typeof index) == "number")?(Colors.FgGr+"["+Colors.FgYe+index+Colors.FgGr+"]"):(Colors.FgGr+"["+Colors.FgGre+"\""+index+"\""+Colors.FgGr+"]"))+Colors.R;
+
                                     var newFunc:any = {};
-                                    if ((typeof device.name) != "string") { console.log(Colors.FgGray+"invalid connection: "+((parentName!=null)?(Colors.FgCyan+parentName+Colors.FgGray+"."+Colors.Reset):(""))+Colors.FgCyan+newDevice.name+Colors.FgGray+"."+Colors.Reset+Colors.FgCyan+"functions"+(((typeof index) == "number")?(Colors.FgGray+"["+Colors.FgYellow+index+Colors.FgGray+"]"):(Colors.FgGray+"["+Colors.FgGreen+"\""+index+"\""+Colors.FgGray+"]"))+Colors.FgGray+"."+Colors.Reset+Colors.FgCyan+"name "+Colors.FgRed+"is not a string"+Colors.FgGray+"."+Colors.Reset); return false; }
+                                    if ((typeof func.name) != "string") { websocket.send(JSON.stringify({type:"reply",reply:false,statusCode:411,error:(DisplayName+".name is not a string"),id:msg.id})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.FgCy+"name "+Colors.FgRe+"is not a string"+Colors.FgGr+"."+Colors.R); return false; }
                                     newFunc.name = func.name;
                                     try { if ((typeof func.public) == "string") func.public = JSON.parse(func.public);
-                                    } catch (err:any) { console.log(Colors.FgGray+"invalid connection: "+((parentName!=null)?(Colors.FgCyan+parentName+Colors.FgGray+"."+Colors.Reset):(""))+Colors.FgCyan+newDevice.name+Colors.FgGray+"."+Colors.Reset+Colors.FgCyan+"functions"+(((typeof index) == "number")?(Colors.FgGray+"["+Colors.FgYellow+index+Colors.FgGray+"]"):(Colors.FgGray+"["+Colors.FgGreen+"\""+index+"\""+Colors.FgGray+"]"))+Colors.FgGray+"."+Colors.Reset+Colors.FgCyan+"public "+Colors.FgRed+"is not a boolean"+Colors.FgGray+"."+Colors.Reset); return false; }
-                                    if ((typeof func.public) != "boolean" && func.public != null) { console.log(Colors.FgGray+"invalid connection: "+((parentName!=null)?(Colors.FgCyan+parentName+Colors.FgGray+"."+Colors.Reset):(""))+Colors.FgCyan+newDevice.name+Colors.FgGray+"."+Colors.Reset+Colors.FgCyan+"functions"+(((typeof index) == "number")?(Colors.FgGray+"["+Colors.FgYellow+index+Colors.FgGray+"]"):(Colors.FgGray+"["+Colors.FgGreen+"\""+index+"\""+Colors.FgGray+"]"))+Colors.FgGray+"."+Colors.Reset+Colors.FgCyan+"public "+Colors.FgRed+"is not a boolean"+Colors.FgGray+"."+Colors.Reset); return false; }
+                                    } catch (err:any) { websocket.send(JSON.stringify({type:"reply",reply:false,statusCode:412,error:(DisplayName+".public is not a boolean"),id:msg.id})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.FgCy+"public "+Colors.FgRe+"is not a boolean"+Colors.FgGr+"."+Colors.R); return false; }
+                                    if ((typeof func.public) != "boolean" && func.public != null) { websocket.send(JSON.stringify({type:"reply",reply:false,statusCode:413,error:(DisplayName+".public is not a boolean"),id:msg.id})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.FgCy+"public "+Colors.FgRe+"is not a boolean"+Colors.FgGr+"."+Colors.R); return false; }
                                     newFunc.public = ((func.public!=null)?func.public:true);
-                                    if ((typeof func.parameters) != "object" || !Array.isArray(func.parameters)) { console.log(Colors.FgGray+"invalid connection: "+((parentName!=null)?(Colors.FgCyan+parentName+Colors.FgGray+"."+Colors.Reset):(""))+Colors.FgCyan+newDevice.name+Colors.FgGray+"."+Colors.Reset+Colors.FgCyan+"functions"+(((typeof index) == "number")?(Colors.FgGray+"["+Colors.FgYellow+index+Colors.FgGray+"]"):(Colors.FgGray+"["+Colors.FgGreen+"\""+index+"\""+Colors.FgGray+"]"))+Colors.FgGray+"."+Colors.Reset+Colors.FgCyan+"parameters "+Colors.FgRed+"is not an object"+Colors.FgGray+"."+Colors.Reset); return false; }
+                                    if ((typeof func.parameters) != "object" || !Array.isArray(func.parameters)) { websocket.send(JSON.stringify({type:"reply",reply:false,statusCode:414,error:(DisplayName+".parameters is not an object"),id:msg.id})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.FgCy+"parameters "+Colors.FgRe+"is not an object"+Colors.FgGr+"."+Colors.R); return false; }
                                     newFunc.parameters = [];
                                     for (let i = 0; i < func.parameters.length; i++) {
                                         const parameter = func.parameters[i];
@@ -193,13 +203,13 @@ ws.on('connection', (websocket:any) => {
                                 }
                             }
                             if (device.devices != null) {
-                                if ((typeof device.devices) != "object") { console.log(Colors.FgGray+"invalid connection: "+((parentName!=null)?(Colors.FgCyan+parentName+Colors.FgGray+"."+Colors.Reset):(""))+Colors.FgCyan+newDevice.name+Colors.FgGray+"."+Colors.Reset+Colors.FgCyan+"devices "+Colors.FgRed+"is not an object"+Colors.FgGray+"."+Colors.Reset); return false; }
+                                if ((typeof device.devices) != "object") { websocket.send(JSON.stringify({type:"reply",reply:false,statusCode:415,error:(DisplayName+".devices is not an object"),id:msg.id})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.R+Colors.FgCy+"devices "+Colors.FgRe+"is not an object"+Colors.FgGr+"."+Colors.R); return false; }
                                 newDevice.devices = {};
                                 if (Array.isArray(device.devices)) {
                                     for (let i = 0; i < device.devices.length; i++) {
                                         const childDevice:any = device.devices[i];
-                                        if ((typeof childDevice.name) != "string") { console.log(Colors.FgGray+"invalid connection: "+((parentName!=null)?(Colors.FgCyan+parentName+Colors.FgGray+"."+Colors.Reset):(""))+Colors.FgCyan+device.name+Colors.FgGray+"."+Colors.Reset+Colors.FgCyan+"device"+Colors.FgGray+"."+Colors.Reset+Colors.FgCyan+"name "+Colors.FgRed+"is not a string"+Colors.FgGray+"."+Colors.Reset); return false; }
-                                        const tmp:any = mapDevice(childDevice, ((parentName!=null)?(device+"."):(""))+device.name);
+                                        if ((typeof childDevice.name) != "string") { websocket.send(JSON.stringify({type:"reply",reply:false,statusCode:416,error:(DisplayName+".\"device\".name is not an string"),id:msg.id})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.R+Colors.FgCy+"device"+Colors.FgGr+"."+Colors.R+Colors.FgCy+"name "+Colors.FgRe+"is not a string"+Colors.FgGr+"."+Colors.R); return false; }
+                                        const tmp:any = mapDevice(childDevice, ((parentName!=null)?(parentName+"."):(""))+device.name);
                                         if (tmp == false) { return false; }
                                         else newDevice.devices[childDevice.name.toLowerCase()] = tmp;
                                     }
@@ -207,20 +217,21 @@ ws.on('connection', (websocket:any) => {
                                     const funcKeys:string[] = Object.keys(device.devices);
                                     for (let i = 0; i < funcKeys.length; i++) {
                                         const childDevice:any = device.devices[funcKeys[i]];
-                                        if ((typeof childDevice.name) != "string") { console.log(Colors.FgGray+"invalid connection: "+((parentName!=null)?(Colors.FgCyan+parentName+Colors.FgGray+"."+Colors.Reset):(""))+Colors.FgCyan+device.name+Colors.FgGray+"."+Colors.Reset+Colors.FgCyan+"device"+Colors.FgGray+"."+Colors.Reset+Colors.FgCyan+"name "+Colors.FgRed+"is not a string"+Colors.FgGray+"."+Colors.Reset); return false; }
+                                        if ((typeof childDevice.name) != "string") { websocket.send(JSON.stringify({type:"reply",reply:false,statusCode:417,error:(DisplayName+".\"device\".name is not an string"),id:msg.id})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.R+Colors.FgCy+"device"+Colors.FgGr+"."+Colors.R+Colors.FgCy+"name "+Colors.FgRe+"is not a string"+Colors.FgGr+"."+Colors.R); return false; }
                                         const tmp:any = mapDevice(childDevice, ((parentName!=null)?(parentName+"."):(""))+device.name);
                                         if (tmp == false) { return false; }
                                         else newDevice.devices[childDevice.name.toLowerCase()] = tmp;
                                     }
                                 }
                             }
-                            if ((device.devices == null || Object.keys(device.devices).length <= 0) &&
+                            if ((device.devices   == null || Object.keys(device.devices  ).length <= 0) &&
                                 (device.functions == null || Object.keys(device.functions).length <= 0)
-                            ) { console.log(Colors.FgGray+"invalid connection: "+Colors.FgRed+"pointless device "+Colors.FgGreen+"\"" + ((parentName!=null)?(Colors.FgCyan+parentName+Colors.FgGray+"."+Colors.Reset):(""))+Colors.FgCyan+device.name+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }// status code 418
+                            ) { websocket.send(JSON.stringify({type:"reply",reply:false,statusCode:418,error:"The server refuses to brew coffee because it is, permanently, a teapot.",id:msg.id})); console.log(Colors.FgGr+"invalid connection: "+Colors.FgRe+"pointless device "+Colors.FgGre+"\"" + DisplayNameColor+Colors.FgGre+"\""+Colors.FgGr+"."+Colors.R); return false; }// status code 418
                             return newDevice;
                         }
                         const tmp:any = mapDevice(msg.data);
                         if (tmp != false) {
+                            const ogMsgId:string|number = msg.data.id;
                             msg.data = tmp;
                             if (websockets[msg.data.name.toLowerCase()] == null && devices[msg.data.name.toLowerCase()] == null) {
                                 //add device data to list
@@ -228,8 +239,8 @@ ws.on('connection', (websocket:any) => {
                                 //add websocket connection to list
                                 websockets[msg.data.name.toLowerCase()] = websocket;
                                 //response
-                                websocket.send("{\"reply\" : \"succes\"" + (msg.id != null ? ", \"id\" : " + msg.id : "") + "}");
-                                if (msg.data.public) console.log(Colors.FgGray+"Device "+Colors.FgGreen+"\"" + msg.data.name + "\""+Colors.FgGray+" conneced"+Colors.FgGray+"."+Colors.Reset);
+                                websocket.send(JSON.stringify({type:"reply",status:true,reply:"succes",id:ogMsgId}));
+                                if (msg.data.public) console.log(Colors.FgGr+"Device "+Colors.FgGre+"\"" + msg.data.name + "\""+Colors.FgGr+" conneced"+Colors.FgGr+"."+Colors.R);
                                 connected = true;
 
                                 if (msg.data.name.toLowerCase() == "nanopi") {
@@ -262,16 +273,16 @@ ws.on('connection', (websocket:any) => {
                         }
                     }
                     if (!connected) {
-                        if (msg.data == null || msg.data.name == null) { console.log(Colors.FgGray+"invalid connection from "+Colors.FgGreen+"\"unknown\""+Colors.FgGray+"."+Colors.Reset); }
+                        if (msg.data == null || msg.data.name == null) { console.log(Colors.FgGr+"invalid connection from "+Colors.FgGre+"\"unknown\""+Colors.FgGr+"."+Colors.R); }
                     }
                     break;
                 }
                 case "command": {
                     //console.log("command: \n" + message + "\n");
                     if (msg.data != null) {
-                        if (msg.data.device     == null) { console.log(msg); websocket.send(JSON.stringify({type:"status",status:false,statusCode:402,error:"Command device is invalid"    ,id:msg.id})); console.log(Colors.FgGray+"Invalid command:"+Colors.FgGray+" Command"+Colors.FgRed+" missing target device"      +Colors.FgGray+"."+Colors.Reset); return; }
-                        if (msg.data.function   == null) { console.log(msg); websocket.send(JSON.stringify({type:"status",status:false,statusCode:403,error:"Command function is invalid"  ,id:msg.id})); console.log(Colors.FgGray+"Invalid command:"+Colors.FgGray+" Command"+Colors.FgRed+" missing target function"    +Colors.FgGray+"."+Colors.Reset); return; }
-                        if (msg.data.parameters == null) { console.log(msg); websocket.send(JSON.stringify({type:"status",status:false,statusCode:405,error:"Command parameters is invalid",id:msg.id})); console.log(Colors.FgGray+"Invalid command:"+Colors.FgGray+" Command"+Colors.FgRed+" missing function parameters"+Colors.FgGray+"."+Colors.Reset); return; }
+                        if (msg.data.device     == null) { console.log(msg); websocket.send(JSON.stringify({type:"status",status:false,statusCode:402,error:"Command device is invalid"    ,id:msg.id})); console.log(Colors.FgGr+"Invalid command:"+Colors.FgGr+" Command"+Colors.FgRe+" missing target device"      +Colors.FgGr+"."+Colors.R); return; }
+                        if (msg.data.function   == null) { console.log(msg); websocket.send(JSON.stringify({type:"status",status:false,statusCode:403,error:"Command function is invalid"  ,id:msg.id})); console.log(Colors.FgGr+"Invalid command:"+Colors.FgGr+" Command"+Colors.FgRe+" missing target function"    +Colors.FgGr+"."+Colors.R); return; }
+                        if (msg.data.parameters == null) { console.log(msg); websocket.send(JSON.stringify({type:"status",status:false,statusCode:405,error:"Command parameters is invalid",id:msg.id})); console.log(Colors.FgGr+"Invalid command:"+Colors.FgGr+" Command"+Colors.FgRe+" missing function parameters"+Colors.FgGr+"."+Colors.R); return; }
 
                         handleCommand(msg as command, websocket);
                     }
@@ -292,9 +303,9 @@ ws.on('connection', (websocket:any) => {
                     }
                     break;
                 }
-                default: { websocket.send(JSON.stringify({type:"status",status:false,statusCode:406,error:"Command type is invalid",id:msg.id})); console.log(Colors.FgGray+"Invalid command:"+Colors.FgRed+" Invalid message type"+Colors.FgGreen+" \""+msg.type+"\""+Colors.FgGray+"."+Colors.Reset); }
+                default: { websocket.send(JSON.stringify({type:"status",status:false,statusCode:406,error:"Command type is invalid",id:msg.id})); console.log(Colors.FgGr+"Invalid command:"+Colors.FgRe+" Invalid message type"+Colors.FgGre+" \""+msg.type+"\""+Colors.FgGr+"."+Colors.R); }
             }
-        } catch (err:any) { websocket.send(JSON.stringify({type:"status",status:false,statusCode:407,error:"Command invalid json",message:err.message})); console.log(Colors.FgGray+"Invalid command:"+Colors.FgRed+" Unable to parse json of message"+Colors.FgGray+"."+Colors.Reset); console.log(message); console.log(err.message); }
+        } catch (err:any) { websocket.send(JSON.stringify({type:"status",status:false,statusCode:407,error:"Command invalid json",message:err.message})); console.log(Colors.FgGr+"Invalid command:"+Colors.FgRe+" Unable to parse json of message"+Colors.FgGr+"."+Colors.R); console.log(message); console.log(err.message); console.log(err.stack); }
     });
 });
 function handleCommand(msg:string|command, websocket?:any) {
@@ -304,18 +315,18 @@ function handleCommand(msg:string|command, websocket?:any) {
             var json:command = JSON.parse(msg) as command;
             if (json != null) {
                 handleCommand(json);
-            } else { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:408,error:"Command is null"})); } console.log(Colors.FgGray+"Invalid command:"+Colors.FgRed+" Command is"+Colors.FgCyan+" null"+Colors.FgGray+"."+Colors.Reset); return; }
+            } else { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:408,error:"Command is null"})); } console.log(Colors.FgGr+"Invalid command:"+Colors.FgRe+" Command is"+Colors.FgCy+" null"+Colors.FgGr+"."+Colors.R); return; }
         } catch (err:any) { console.log(err.stack + "    ln233"); }
     } else if ((typeof msg) == "object"){
         assert(typeof msg == "object")
         if (msg.data.device.split(".")[0].toLowerCase() == "self") {
             var _switch:{[key:string]:Function} = {
                 "authenticate()": function (parameters:[string,string,string|boolean]) {// used for web execution page
-                    if (parameters.length < 2                       ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:409,error:"self.authenticate parameters are invalid",id:msg.id}));     } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.authenticate",parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
-                    if (parameters[0] == null || parameters[0] == "") { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:410,error:"self.authenticate \"username\" is invalid",id:msg.id}));     } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.authenticate",parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
-                    if (parameters[1] == null || parameters[1] == "") { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:411,error:"self.authenticate \"password\" is invalid",id:msg.id})); } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.authenticate",parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
-                    if ((typeof parameters[0]) != "string"          ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:410,error:"self.authenticate \"username\" is invalid",id:msg.id}));     } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.authenticate",parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
-                    if ((typeof parameters[1]) != "string"          ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:411,error:"self.authenticate \"password\" is invalid",id:msg.id})); } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.authenticate",parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
+                    if (parameters.length < 2                       ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:409,error:"self.authenticate parameters are invalid",id:msg.id}));     } console.log(Colors.FgGr+"Invalid command:"+Colors.FgGre+" \""+printFakeFunction("self.authenticate",parameters)+Colors.FgGre+"\""+Colors.FgGr+"."+Colors.R); return false; }
+                    if (parameters[0] == null || parameters[0] == "") { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:410,error:"self.authenticate \"username\" is invalid",id:msg.id}));     } console.log(Colors.FgGr+"Invalid command:"+Colors.FgGre+" \""+printFakeFunction("self.authenticate",parameters)+Colors.FgGre+"\""+Colors.FgGr+"."+Colors.R); return false; }
+                    if (parameters[1] == null || parameters[1] == "") { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:411,error:"self.authenticate \"password\" is invalid",id:msg.id})); } console.log(Colors.FgGr+"Invalid command:"+Colors.FgGre+" \""+printFakeFunction("self.authenticate",parameters)+Colors.FgGre+"\""+Colors.FgGr+"."+Colors.R); return false; }
+                    if ((typeof parameters[0]) != "string"          ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:410,error:"self.authenticate \"username\" is invalid",id:msg.id}));     } console.log(Colors.FgGr+"Invalid command:"+Colors.FgGre+" \""+printFakeFunction("self.authenticate",parameters)+Colors.FgGre+"\""+Colors.FgGr+"."+Colors.R); return false; }
+                    if ((typeof parameters[1]) != "string"          ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:411,error:"self.authenticate \"password\" is invalid",id:msg.id})); } console.log(Colors.FgGr+"Invalid command:"+Colors.FgGre+" \""+printFakeFunction("self.authenticate",parameters)+Colors.FgGre+"\""+Colors.FgGr+"."+Colors.R); return false; }
                     let validAccount:boolean = false
                     for (let i = 0; i < Accounts.length; i++) {
                         if (Accounts[i].username == parameters[0] && Accounts[i].password == parameters[1]) {
@@ -389,26 +400,26 @@ function handleCommand(msg:string|command, websocket?:any) {
                     return true;
                 },
                 "callback()": function (parameters:Array<number|string>) {
-                    if (parameters.length < 2                       ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:412,error:"self.callback not enough parameters",id:msg.id}));    } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.callback",parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
-                    if (parameters[0] == null || parameters[0] == "") { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:413,error:"self.callback \"callback\" is invalid",id:msg.id}));  } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.callback",parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
-                    if (parameters[1] == null || parameters[1] == "") { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:414,error:"self.callback \"returnVal\" is invalid",id:msg.id})); } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.callback",parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
+                    if (parameters.length < 2                       ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:412,error:"self.callback not enough parameters",id:msg.id}));    } console.log(Colors.FgGr+"Invalid command:"+Colors.FgGre+" \""+printFakeFunction("self.callback",parameters)+Colors.FgGre+"\""+Colors.FgGr+"."+Colors.R); return false; }
+                    if (parameters[0] == null || parameters[0] == "") { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:413,error:"self.callback \"callback\" is invalid",id:msg.id}));  } console.log(Colors.FgGr+"Invalid command:"+Colors.FgGre+" \""+printFakeFunction("self.callback",parameters)+Colors.FgGre+"\""+Colors.FgGr+"."+Colors.R); return false; }
+                    if (parameters[1] == null || parameters[1] == "") { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:414,error:"self.callback \"returnVal\" is invalid",id:msg.id})); } console.log(Colors.FgGr+"Invalid command:"+Colors.FgGre+" \""+printFakeFunction("self.callback",parameters)+Colors.FgGre+"\""+Colors.FgGr+"."+Colors.R); return false; }
 
                     var callbackNum:number = Number(parameters[0]);
-                    if (Number.isNaN(callbackNum)                   ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:415,error:"self.callback \"callback\" is invalid",id:msg.id}));  } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.callback",parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
-                    if ((typeof parameters[1]) != "string"          ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:416,error:"self.callback \"returnVal\" is invalid",id:msg.id})); } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.callback",parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
+                    if (Number.isNaN(callbackNum)                   ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:415,error:"self.callback \"callback\" is invalid",id:msg.id}));  } console.log(Colors.FgGr+"Invalid command:"+Colors.FgGre+" \""+printFakeFunction("self.callback",parameters)+Colors.FgGre+"\""+Colors.FgGr+"."+Colors.R); return false; }
+                    if ((typeof parameters[1]) != "string"          ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:416,error:"self.callback \"returnVal\" is invalid",id:msg.id})); } console.log(Colors.FgGr+"Invalid command:"+Colors.FgGre+" \""+printFakeFunction("self.callback",parameters)+Colors.FgGre+"\""+Colors.FgGr+"."+Colors.R); return false; }
 
                     callbacks[callbackNum](parameters[1],callbackNum);
                     delete callbacks[callbackNum];
                     return true;
                 },
                 "subscribeconnection()": function (parameters:[string,string,string]) {
-                    if (parameters.length < 3                       ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:417,error:"self.subscribeconnection not enough parameters",id:msg.id}));               } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.subscribeconnection"   ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
-                    if (parameters[0] == null || parameters[0] == "") { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:418,error:"self.subscribeconnection \"deviceName\" is invalid",id:msg.id}));           } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.subscribeconnection"   ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
-                    if (parameters[1] == null || parameters[1] == "") { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:419,error:"self.subscribeconnection \"callbackDeviceName\" is invalid",id:msg.id}));   } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.subscribeconnection"   ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
-                    if (parameters[2] == null || parameters[2] == "") { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:420,error:"self.subscribeconnection \"callbackFunctionName\" is invalid",id:msg.id})); } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.subscribeconnection"   ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
-                    if ((typeof parameters[0]) != "string"          ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:418,error:"self.subscribeconnection \"deviceName\" is invalid",id:msg.id}));           } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.subscribeconnection"   ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
-                    if ((typeof parameters[1]) != "string"          ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:419,error:"self.subscribeconnection \"callbackDeviceName\" is invalid",id:msg.id}));   } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.subscribeconnection"   ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
-                    if ((typeof parameters[2]) != "string"          ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:420,error:"self.subscribeconnection \"callbackFunctionName\" is invalid",id:msg.id})); } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.subscribeconnection"   ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
+                    if (parameters.length < 3                       ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:417,error:"self.subscribeconnection not enough parameters",id:msg.id}));               } console.log(Colors.FgGr+"Invalid command:"+Colors.FgGre+" \""+printFakeFunction("self.subscribeconnection"   ,parameters)+Colors.FgGre+"\""+Colors.FgGr+"."+Colors.R); return false; }
+                    if (parameters[0] == null || parameters[0] == "") { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:418,error:"self.subscribeconnection \"deviceName\" is invalid",id:msg.id}));           } console.log(Colors.FgGr+"Invalid command:"+Colors.FgGre+" \""+printFakeFunction("self.subscribeconnection"   ,parameters)+Colors.FgGre+"\""+Colors.FgGr+"."+Colors.R); return false; }
+                    if (parameters[1] == null || parameters[1] == "") { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:419,error:"self.subscribeconnection \"callbackDeviceName\" is invalid",id:msg.id}));   } console.log(Colors.FgGr+"Invalid command:"+Colors.FgGre+" \""+printFakeFunction("self.subscribeconnection"   ,parameters)+Colors.FgGre+"\""+Colors.FgGr+"."+Colors.R); return false; }
+                    if (parameters[2] == null || parameters[2] == "") { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:420,error:"self.subscribeconnection \"callbackFunctionName\" is invalid",id:msg.id})); } console.log(Colors.FgGr+"Invalid command:"+Colors.FgGre+" \""+printFakeFunction("self.subscribeconnection"   ,parameters)+Colors.FgGre+"\""+Colors.FgGr+"."+Colors.R); return false; }
+                    if ((typeof parameters[0]) != "string"          ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:418,error:"self.subscribeconnection \"deviceName\" is invalid",id:msg.id}));           } console.log(Colors.FgGr+"Invalid command:"+Colors.FgGre+" \""+printFakeFunction("self.subscribeconnection"   ,parameters)+Colors.FgGre+"\""+Colors.FgGr+"."+Colors.R); return false; }
+                    if ((typeof parameters[1]) != "string"          ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:419,error:"self.subscribeconnection \"callbackDeviceName\" is invalid",id:msg.id}));   } console.log(Colors.FgGr+"Invalid command:"+Colors.FgGre+" \""+printFakeFunction("self.subscribeconnection"   ,parameters)+Colors.FgGre+"\""+Colors.FgGr+"."+Colors.R); return false; }
+                    if ((typeof parameters[2]) != "string"          ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:420,error:"self.subscribeconnection \"callbackFunctionName\" is invalid",id:msg.id})); } console.log(Colors.FgGr+"Invalid command:"+Colors.FgGre+" \""+printFakeFunction("self.subscribeconnection"   ,parameters)+Colors.FgGre+"\""+Colors.FgGr+"."+Colors.R); return false; }
 
                     const deviceName = parameters[0].toLowerCase();
                     if (websockets[deviceName] == null) {
@@ -420,13 +431,13 @@ function handleCommand(msg:string|command, websocket?:any) {
                     return true;
                 },
                 "subscribedisconnection()": function (parameters:[string,string,string]) {
-                    if (parameters.length < 3                       ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:421,error:"self.subscribedisconnection not enough parameters",id:msg.id}));               } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.subscribedisconnection"   ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
-                    if (parameters[0] == null || parameters[0] == "") { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:422,error:"self.subscribedisconnection \"deviceName\" is invalid",id:msg.id}));           } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.subscribedisconnection"   ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
-                    if (parameters[1] == null || parameters[1] == "") { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:423,error:"self.subscribedisconnection \"callbackDeviceName\" is invalid",id:msg.id}));   } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.subscribedisconnection"   ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
-                    if (parameters[2] == null || parameters[2] == "") { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:424,error:"self.subscribedisconnection \"callbackFunctionName\" is invalid",id:msg.id})); } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.subscribedisconnection"   ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
-                    if ((typeof parameters[0]) != "string"          ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:422,error:"self.subscribedisconnection \"deviceName\" is invalid",id:msg.id}));           } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.subscribedisconnection"   ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
-                    if ((typeof parameters[1]) != "string"          ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:423,error:"self.subscribedisconnection \"callbackDeviceName\" is invalid",id:msg.id}));   } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.subscribedisconnection"   ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
-                    if ((typeof parameters[2]) != "string"          ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:424,error:"self.subscribedisconnection \"callbackFunctionName\" is invalid",id:msg.id})); } console.log(Colors.FgGray+"Invalid command:"+Colors.FgGreen+" \""+printFakeFunction("self.subscribedisconnection"   ,parameters)+Colors.FgGreen+"\""+Colors.FgGray+"."+Colors.Reset); return false; }
+                    if (parameters.length < 3                       ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:421,error:"self.subscribedisconnection not enough parameters",id:msg.id}));               } console.log(Colors.FgGr+"Invalid command:"+Colors.FgGre+" \""+printFakeFunction("self.subscribedisconnection"   ,parameters)+Colors.FgGre+"\""+Colors.FgGr+"."+Colors.R); return false; }
+                    if (parameters[0] == null || parameters[0] == "") { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:422,error:"self.subscribedisconnection \"deviceName\" is invalid",id:msg.id}));           } console.log(Colors.FgGr+"Invalid command:"+Colors.FgGre+" \""+printFakeFunction("self.subscribedisconnection"   ,parameters)+Colors.FgGre+"\""+Colors.FgGr+"."+Colors.R); return false; }
+                    if (parameters[1] == null || parameters[1] == "") { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:423,error:"self.subscribedisconnection \"callbackDeviceName\" is invalid",id:msg.id}));   } console.log(Colors.FgGr+"Invalid command:"+Colors.FgGre+" \""+printFakeFunction("self.subscribedisconnection"   ,parameters)+Colors.FgGre+"\""+Colors.FgGr+"."+Colors.R); return false; }
+                    if (parameters[2] == null || parameters[2] == "") { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:424,error:"self.subscribedisconnection \"callbackFunctionName\" is invalid",id:msg.id})); } console.log(Colors.FgGr+"Invalid command:"+Colors.FgGre+" \""+printFakeFunction("self.subscribedisconnection"   ,parameters)+Colors.FgGre+"\""+Colors.FgGr+"."+Colors.R); return false; }
+                    if ((typeof parameters[0]) != "string"          ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:422,error:"self.subscribedisconnection \"deviceName\" is invalid",id:msg.id}));           } console.log(Colors.FgGr+"Invalid command:"+Colors.FgGre+" \""+printFakeFunction("self.subscribedisconnection"   ,parameters)+Colors.FgGre+"\""+Colors.FgGr+"."+Colors.R); return false; }
+                    if ((typeof parameters[1]) != "string"          ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:423,error:"self.subscribedisconnection \"callbackDeviceName\" is invalid",id:msg.id}));   } console.log(Colors.FgGr+"Invalid command:"+Colors.FgGre+" \""+printFakeFunction("self.subscribedisconnection"   ,parameters)+Colors.FgGre+"\""+Colors.FgGr+"."+Colors.R); return false; }
+                    if ((typeof parameters[2]) != "string"          ) { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:424,error:"self.subscribedisconnection \"callbackFunctionName\" is invalid",id:msg.id})); } console.log(Colors.FgGr+"Invalid command:"+Colors.FgGre+" \""+printFakeFunction("self.subscribedisconnection"   ,parameters)+Colors.FgGre+"\""+Colors.FgGr+"."+Colors.R); return false; }
 
                     const deviceName = parameters[0].toLowerCase();
                     disconnectionSubscriptions[deviceName] = disconnectionSubscriptions[deviceName]||[];
@@ -443,7 +454,8 @@ function handleCommand(msg:string|command, websocket?:any) {
             if (_switch[nm+"()"] != null) {
                 var out:boolean = _switch[nm+"()"](msg.data.parameters, websocket,msg.id);
                 if (out) websocket.send(JSON.stringify({type:"status",status:true,statusCode:200,id:msg.id}));
-            } else { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:425,error:"Function \""+nm+"\" not found",id:msg.id})); } console.log(Colors.FgGray+"Invalid command:"+Colors.FgRed+" Function"+Colors.FgGreen+" \""+nm+"\""+Colors.FgRed+" not found"+Colors.FgGray+"."+Colors.Reset); return; }
+                else { console.log(msg.data);console.log(""); }
+            } else { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:425,error:"Function \""+nm+"\" not found",id:msg.id})); } console.log(Colors.FgGr+"Invalid command:"+Colors.FgRe+" Function"+Colors.FgGre+" \""+nm+"\""+Colors.FgRe+" not found"+Colors.FgGr+"."+Colors.R); return; }
         } else {
             const out:([boolean]|[string,string]) = findFunction(devices,msg.data,websocket) as ([boolean]|[string,string]);
             if (out[0] != false) {
@@ -454,11 +466,11 @@ function handleCommand(msg:string|command, websocket?:any) {
                     websockets[lst[0]].send(message);
                     if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:true,statusCode:200,id:msg.id})); }
                 } else {
-                    if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:426,error:"Device \""+lst[0]+"\" not connected",id:msg.id})); } console.log(Colors.FgGray+"Invalid command:"+Colors.FgRed+" Device"+Colors.FgGreen+" \""+lst[0]+"\""+Colors.FgRed+" not connected"+Colors.FgGray+"."+Colors.Reset);
+                    if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:426,error:"Device \""+lst[0]+"\" not connected",id:msg.id})); } console.log(Colors.FgGr+"Invalid command:"+Colors.FgRe+" Device"+Colors.FgGre+" \""+lst[0]+"\""+Colors.FgRe+" not connected"+Colors.FgGr+"."+Colors.R);
                 }
-            } else console.log(msg.data);
+            } else { console.log(msg.data);console.log("") }
         }
-    } else { console.log(Colors.FgGray+"Internal error:"+Colors.FgYellow+" Message"+Colors.FgRed+" is not an object"+Colors.FgGray+"."+Colors.Reset); }
+    } else { console.log(Colors.FgGr+"Internal error:"+Colors.FgYe+" Message"+Colors.FgRe+" is not an object"+Colors.FgGr+"."+Colors.R); }
 }
 function findFunction(list:{[key:string]:Device|null},data:cmdData,websocket:any,type?:number) : ([boolean]|[{[key:string]:string|Array<string|number|boolean|null>}]|[string,string]){
     if (list != null && (typeof list) == "object" && !Array.isArray(list) && data != null) {
@@ -482,7 +494,7 @@ function findFunction(list:{[key:string]:Device|null},data:cmdData,websocket:any
                     if (data.parameters[i] == null || data.parameters[i] == "null") {
                         if (funcParams[i].nullable == true) {
                             if (data.parameters[i] == "null") { data.parameters[i] = null; } continue;// valid
-                        } else { condition = false; failIndex=i; got=Colors.FgCyan+"null"; break; } // invalid
+                        } else { condition = false; failIndex=i; got=Colors.FgCy+"null"; break; } // invalid
                     } else if ((typeof data.parameters[i]) == "number" || (typeof data.parameters[i]) == "bigint") {
                         if (funcParams[i].type == "number") continue;// valid
                         else { condition = false; failIndex=i; got="number"; break; } // invalid
@@ -504,12 +516,12 @@ function findFunction(list:{[key:string]:Device|null},data:cmdData,websocket:any
                                 }
                             } catch (err:any) { condition = false; failIndex=i; got="error"; break; }// invalid
                         }
-                    } else { condition = false; failIndex=i; got=Colors.FgCyan+"other"; break; } // invalid
+                    } else { condition = false; failIndex=i; got=Colors.FgCy+"other"; break; } // invalid
                 }
                 if (!condition) {
                     if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:427,error:"Found function but parameter types do not match",id:data.id})); }
-                    console.log(Colors.FgGray+"Invalid command:"+Colors.Reset+" Found function but"+Colors.FgRed+" parameter types do not match"+Colors.FgGray+"."+Colors.Reset);
-                    console.log(Colors.FgGray+"parameter"+Colors.FgYellow+"#"+failIndex+Colors.FgGray+", expected "+Colors.FgGreen+type+Colors.FgGray+" but got "+Colors.FgGreen+got+Colors.FgGray+"."+Colors.Reset);
+                    console.log(Colors.FgGr+"Invalid command:"+Colors.R+" Found function but"+Colors.FgRe+" parameter types do not match"+Colors.FgGr+"."+Colors.R);
+                    console.log(Colors.FgGr+"parameter"+Colors.FgYe+"#"+failIndex+Colors.FgGr+", expected "+Colors.FgGre+type+Colors.FgGr+" but got "+Colors.FgGre+got+Colors.FgGr+"."+Colors.R);
                     return [false];
                 }
                 if (type == 2) {
@@ -519,9 +531,9 @@ function findFunction(list:{[key:string]:Device|null},data:cmdData,websocket:any
                 }
             } else {
                 if (device == null) {
-                    if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:428,error:"Device \""+deviceName+"\" not found",id:data.id}));      } console.log(Colors.FgGray+"Invalid command:"+Colors.FgRed+" Device"+Colors.FgGreen+" \""+deviceName+"\""+Colors.FgRed+" not found"+Colors.FgGray+"."+Colors.Reset);
+                    if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:428,error:"Device \""+deviceName+"\" not found",id:data.id}));      } console.log(Colors.FgGr+"Invalid command:"+Colors.FgRe+" Device"+Colors.FgGre+" \""+deviceName+"\""+Colors.FgRe+" not found"+Colors.FgGr+"."+Colors.R);
                 } else if (Object.keys(device.functions).length <= 0 || device.functions[data.function.toLowerCase()] == null) {
-                    if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:429,error:"Function \""+data.function+"\" not found",id:data.id})); } console.log(Colors.FgGray+"Invalid command:"+Colors.FgRed+" Device"+Colors.FgGreen+" \""+deviceName+"\""+Colors.FgRed+" does not contain function"+Colors.FgGreen+" \"" + data.function + "\""+Colors.FgGray+"."+Colors.Reset);
+                    if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:429,error:"Function \""+data.function+"\" not found",id:data.id})); } console.log(Colors.FgGr+"Invalid command:"+Colors.FgRe+" Device"+Colors.FgGre+" \""+deviceName+"\""+Colors.FgRe+" does not contain function"+Colors.FgGre+" \"" + data.function + "\""+Colors.FgGr+"."+Colors.R);
                 }
                 return [false];
             }
@@ -541,9 +553,9 @@ function findFunction(list:{[key:string]:Device|null},data:cmdData,websocket:any
                 }
             } else {
                 if (list[shift] == null) {
-                    if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:428,error:"Device \""+shift+"\" not found",id:data.id}));                        } console.log(Colors.FgGray+"Invalid command:"+Colors.FgRed+" Device"+Colors.FgGreen+" \""+shift+"\""+Colors.FgRed+" not found"+Colors.FgGray+"."+Colors.Reset);
+                    if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:428,error:"Device \""+shift+"\" not found",id:data.id}));                        } console.log(Colors.FgGr+"Invalid command:"+Colors.FgRe+" Device"+Colors.FgGre+" \""+shift+"\""+Colors.FgRe+" not found"+Colors.FgGr+"."+Colors.R);
                 } else if (Object.keys(list[shift]!.devices!).length <= 0) {
-                    if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:430,error:"Device does not have child \""+deviceNameSplit[0]+"\"",id:data.id})); } console.log(Colors.FgGray+"Invalid command:"+Colors.FgRed+" Device"+Colors.FgGreen+" \""+shift+"\""+Colors.FgRed+" does not have child devices"+Colors.FgGray+"."+Colors.Reset);
+                    if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:430,error:"Device does not have child \""+deviceNameSplit[0]+"\"",id:data.id})); } console.log(Colors.FgGr+"Invalid command:"+Colors.FgRe+" Device"+Colors.FgGre+" \""+shift+"\""+Colors.FgRe+" does not have child devices"+Colors.FgGr+"."+Colors.R);
                 } else {
                     console.log("weird error ln531");
                 }
@@ -552,13 +564,13 @@ function findFunction(list:{[key:string]:Device|null},data:cmdData,websocket:any
         }
     } else {
         if (list == null) {
-            console.log(Colors.FgGray+"Internal error: list"+Colors.FgRed+" is"+Colors.FgCyan+" null"+Colors.FgGray+"."+Colors.Reset);
+            console.log(Colors.FgGr+"Internal error: list"+Colors.FgRe+" is"+Colors.FgCy+" null"+Colors.FgGr+"."+Colors.R);
         } else if ((typeof list) != "object") {
-            console.log(Colors.FgGray+"Internal error: list"+Colors.FgRed+" is not an object"+Colors.FgGray+"."+Colors.Reset);
+            console.log(Colors.FgGr+"Internal error: list"+Colors.FgRe+" is not an object"+Colors.FgGr+"."+Colors.R);
         } else if (Array.isArray(list)) {
-            console.log(Colors.FgGray+"Internal error: list"+Colors.FgRed+" is an array"+Colors.FgGray+"."+Colors.Reset);
+            console.log(Colors.FgGr+"Internal error: list"+Colors.FgRe+" is an array"+Colors.FgGr+"."+Colors.R);
         } else {// data == null
-            console.log(Colors.FgGray+"Internal error: data"+Colors.FgRed+" is"+Colors.FgCyan+" null"+Colors.FgGray+"."+Colors.Reset);
+            console.log(Colors.FgGr+"Internal error: data"+Colors.FgRe+" is"+Colors.FgCy+" null"+Colors.FgGr+"."+Colors.R);
         }
         return [false];
     }
@@ -676,7 +688,7 @@ var localdevices:{ [key:string]:LocalDevice } = {
                         Spotify.SpotifyGetToken(req.query.code);
                     }
                 } else {
-                    console.log(Colors.FgGray+"Spotify token error:"+Colors.Reset+req.query.error);
+                    console.log(Colors.FgGr+"Spotify token error:"+Colors.R+req.query.error);
                 }
             },
             "/SpotifyPlay"              :function (req:any, res:any) {
@@ -743,19 +755,19 @@ var localdevices:{ [key:string]:LocalDevice } = {
                             }
                         }
                         
-                    } else { console.log(Colors.FgGray+"Internal error:"+Colors.FgYellow+" Lamp"+Colors.FgCyan+" is not connected"+Colors.FgGray+"."+Colors.Reset); res.send("error"); }
+                    } else { console.log(Colors.FgGr+"Internal error:"+Colors.FgYe+" Lamp"+Colors.FgCy+" is not connected"+Colors.FgGr+"."+Colors.R); res.send("error"); }
                 } catch (err:any) { console.log(err); }
             },
             "/LampOff":function (req:any, res:any) {
                 try {
                     if (websockets["lamp"] != null) { websockets["lamp"].send("{\"type\":\"command\",\"data\":\"turnoff()\",\"parameters\":[]}"); res.send("false"); }
-                    else { console.log(Colors.FgGray+"Internal error:"+Colors.FgYellow+" Lamp"+Colors.FgCyan+" is not connected"+Colors.FgGray+"."+Colors.Reset); res.send("error"); }
+                    else { console.log(Colors.FgGr+"Internal error:"+Colors.FgYe+" Lamp"+Colors.FgCy+" is not connected"+Colors.FgGr+"."+Colors.R); res.send("error"); }
                 } catch (err:any) { console.log(err); }
             },
             "/LampOn":function (req:any, res:any) {
                 try {
                     if (websockets["lamp"] != null) { websockets["lamp"].send("{\"type\":\"command\",\"data\":\"turnon()\",\"parameters\":[]}"); res.send("true"); }
-                    else { console.log(Colors.FgGray+"Internal error:"+Colors.FgYellow+" Lamp"+Colors.FgCyan+" is not connected"+Colors.FgGray+"."+Colors.Reset); res.send("error"); }
+                    else { console.log(Colors.FgGr+"Internal error:"+Colors.FgYe+" Lamp"+Colors.FgCy+" is not connected"+Colors.FgGr+"."+Colors.R); res.send("error"); }
                 } catch (err:any) { console.log(err); }
             },
             "/LampStatus":function (req:any, res:any) {
@@ -771,7 +783,7 @@ var localdevices:{ [key:string]:LocalDevice } = {
                                 return;
                             }
                         }
-                    } else { console.log(Colors.FgGray+"Internal error:"+Colors.FgYellow+" Lamp"+Colors.FgCyan+" is not connected"+Colors.FgGray+"."+Colors.Reset); res.send("error"); }
+                    } else { console.log(Colors.FgGr+"Internal error:"+Colors.FgYe+" Lamp"+Colors.FgCy+" is not connected"+Colors.FgGr+"."+Colors.R); res.send("error"); }
                 } catch (err) { console.log(err); }
             }
         }
@@ -783,7 +795,7 @@ Object.keys(localdevices).forEach((i) => {
         if (localdevices[i].device != undefined && devices.self!.devices![localdevices[i].device.name.toLowerCase()] == null) {
             devices.self!.devices![localdevices[i].device.name.toLowerCase()] = localdevices[i].device
         } else {
-            console.log(Colors.FgGray+"Internal error:"+Colors.FgRed+"localDevice "+Colors.FgGreen+"\"" + localdevices[i].device != undefined ? localdevices[i].device.name : "" + "\""+Colors.FgRed+" already exists"+Colors.FgGray+"."+Colors.Reset);
+            console.log(Colors.FgGr+"Internal error:"+Colors.FgRe+"localDevice "+Colors.FgGre+"\"" + localdevices[i].device != undefined ? localdevices[i].device.name : "" + "\""+Colors.FgRe+" already exists"+Colors.FgGr+"."+Colors.R);
         }
     }
 });
@@ -797,7 +809,7 @@ Object.keys(localdevices).forEach((i) => {
                     } catch (err:any) { console.log("err: " + err.stack + "  ln747") }
                 });
             } else {
-                console.log(Colors.FgGray+"Internal error:"+Colors.FgCyan+"localdevices"+Colors.FgGray+"["+Colors.FgYellow+i+Colors.FgGray+"]."+Colors.FgCyan+"Rest"+Colors.FgGray+"["+Colors.FgYellow+j+Colors.FgGray+"]"+Colors.FgRed+" is not of type "+Colors.FgGreen+" function"+Colors.FgGray+"."+Colors.Reset+Colors.Reset);
+                console.log(Colors.FgGr+"Internal error:"+Colors.FgCy+"localdevices"+Colors.FgGr+"["+Colors.FgYe+i+Colors.FgGr+"]."+Colors.FgCy+"Rest"+Colors.FgGr+"["+Colors.FgYe+j+Colors.FgGr+"]"+Colors.FgRe+" is not of type "+Colors.FgGre+" function"+Colors.FgGr+"."+Colors.R+Colors.R);
             }
         });
     }
@@ -807,5 +819,5 @@ Object.keys(localdevices).forEach((i) => {
 var server:any = app.listen(8081, function () {
     //var host:string = server.address().address;
     var port:number = server.address().port;
-    console.log(Colors.FgGray+"Public web execution page is running at http://"+ getIp() +Colors.FgGray+":"+Colors.FgYellow+ port +Colors.Reset);
+    console.log(Colors.FgGr+"Public web execution page is running at http://"+ getIp() +Colors.FgGr+":"+Colors.FgYe+ port +Colors.R);
  });

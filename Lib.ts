@@ -243,25 +243,25 @@ var exampleConnectionJSON:any = {
         "name": "deviceName",
         "functions":{
             "function1name":{
-                "name":"function1Name",
+                "name":"Function1Name",
                 "parameters":[
-                    {"name":"Parameter1Name","type":"string","nullable":false},
-                    {"name":"Parameter2Name","type":"bool",  "nullable":false},
-                    {"name":"Parameter3Name","type":"number","nullable":true}
+                    {"name":"deviceFunction1Parameter1Name","type":"string","nullable":false},
+                    {"name":"deviceFunction1Parameter2Name","type":"bool",  "nullable":false},
+                    {"name":"deviceFunction1Parameter3Name","type":"number","nullable":true}
                 ],
                 "public":true
             }
         },
         "devices": {
-            "childdevicename": {
-                "name":"childDeviceName",
+            "childname": {
+                "name":"childName",
                 "functions":{
-                    "childdevicefunction1name":{
-                        "name":"childDeviceFunction1Name",
+                    "childfunction1name":{
+                        "name":"childFunction1Name",
                         "parameters":[
-                            {"name":"childDeviceParameter1Name","type":"string","nullable":false},
-                            {"name":"childDeviceParameter2Name","type":"bool",  "nullable":false},
-                            {"name":"childDeviceParameter3Name","type":"number","nullable":true}
+                            {"name":"childFunction1Parameter1Name","type":"string","nullable":false},
+                            {"name":"childFunction1Parameter2Name","type":"bool",  "nullable":false},
+                            {"name":"childFunction1Parameter3Name","type":"number","nullable":true}
                         ],
                         "public":true
                     }
@@ -327,33 +327,55 @@ var examplePong:pingpong = {
 //#endregion
 
 export class Colors {
-    static Reset     :string = "\x1b[0m"  ;
-    static Bright    :string = "\x1b[1m"  ;
+    static Reset     :string = "\x1b[0m";
+    static Bright    :string = "\x1b[1m";
+    static Underscore:string = "\x1b[4m";
+    static Reverse   :string = "\x1b[7m";
     //static Dim       :string = "\x1b[2m";//does not work at all
-    static Underscore:string = "\x1b[4m"  ;
     //static Blink     :string = "\x1b[5m";//does not work at all
-    static Reverse   :string = "\x1b[7m"  ;
     //static Hidden    :string = "\x1b[8m";//does not work at all
+    static R  :string = "\x1b[0m";
+    static B  :string = "\x1b[1m";
+    static U  :string = "\x1b[4m";
+    static Rev:string = "\x1b[7m";
 
-    static FgBlack   :string = "\x1b[30m" ;
-    static FgRed     :string = "\x1b[31m" ;
-    static FgGreen   :string = "\x1b[32m" ;
-    static FgYellow  :string = "\x1b[33m" ;//does not work on powershell somehow
-    static FgBlue    :string = "\x1b[34m" ;
-    static FgMagenta :string = "\x1b[35m" ;
-    static FgCyan    :string = "\x1b[36m" ;
-    static FgWhite   :string = "\x1b[37m" ;
-    static FgGray    :string = "\x1b[90m" ;
+    static FgBlack  :string = "\x1b[30m";
+    static FgRed    :string = "\x1b[31m";
+    static FgGreen  :string = "\x1b[32m";
+    static FgYellow :string = "\x1b[33m";//does not work on powershell somehow
+    static FgBlue   :string = "\x1b[34m";
+    static FgMagenta:string = "\x1b[35m";
+    static FgCyan   :string = "\x1b[36m";
+    static FgWhite  :string = "\x1b[37m";
+    static FgGray   :string = "\x1b[90m";
+    static FgBl :string = "\x1b[30m";
+    static FgRe :string = "\x1b[31m";
+    static FgGre:string = "\x1b[32m";
+    static FgYe :string = "\x1b[33m";//does not work on powershell somehow
+    static FgBlu:string = "\x1b[34m";
+    static FgMa :string = "\x1b[35m";
+    static FgCy :string = "\x1b[36m";
+    static FgWh :string = "\x1b[37m";
+    static FgGr :string = "\x1b[90m";
 
-    static BgBlack   :string = "\x1b[40m" ;
-    static BgRed     :string = "\x1b[41m" ;
-    static BgGreen   :string = "\x1b[42m" ;
-    static BgYellow  :string = "\x1b[43m" ;
-    static BgBlue    :string = "\x1b[44m" ;
-    static BgMagenta :string = "\x1b[45m" ;
-    static BgCyan    :string = "\x1b[46m" ;
-    static BgWhite   :string = "\x1b[47m" ;
-    static BgGray    :string = "\x1b[100m";
+    static BgBlack  :string = "\x1b[40m" ;
+    static BgRed    :string = "\x1b[41m" ;
+    static BgGreen  :string = "\x1b[42m" ;
+    static BgYellow :string = "\x1b[43m" ;
+    static BgBlue   :string = "\x1b[44m" ;
+    static BgMagenta:string = "\x1b[45m" ;
+    static BgCyan   :string = "\x1b[46m" ;
+    static BgWhite  :string = "\x1b[47m" ;
+    static BgGray   :string = "\x1b[100m";
+    static BgBl :string = "\x1b[40m" ;
+    static BgRe :string = "\x1b[41m" ;
+    static BgGr :string = "\x1b[42m" ;
+    static BgYe :string = "\x1b[43m" ;
+    static BgBlu:string = "\x1b[44m" ;
+    static BgMa :string = "\x1b[45m" ;
+    static BgCy :string = "\x1b[46m" ;
+    static BgWh :string = "\x1b[47m" ;
+    static BgGra:string = "\x1b[100m";
 }
 
 export function printFakeFunction(func:string,parameters:any[]):string {

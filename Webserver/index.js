@@ -34,13 +34,13 @@ function setup() {
 		connected = true;
 		connecting = false;
 		console.clear();
-		console.log("connected");
+		console.log("ws connected");
 		ws.onmessage = function (event) {
 			if (JSON.parse(event.data) != null) {
 				var msg = JSON.parse(event.data);
 				if (msg.type == "authentication") {
-					//console.log("received responce");
 					if (msg.status == true) {
+						console.log("authenticated");
 						document.body.innerHTML = "";
 						var page = append(document.body,"p","",{
 							id:"page",
@@ -103,8 +103,13 @@ function setup() {
 							}, 300);
 						}
 					}
-				} else if (msg.type == "pong") {
-					//console.log("pong");
+				} else if (msg.type == "status") {
+					if (msg.status != null && msg.status == false) {
+						console.log("command failed");
+						console.log(msg.statusCode)
+						console.log(msg.error)
+						console.log("");
+					}
 				} else {
 					console.log(event.data);
 				}
