@@ -1,0 +1,1 @@
+tsc -t es5 .\Mocs.NanoPi.ts
