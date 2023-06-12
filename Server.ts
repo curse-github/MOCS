@@ -37,11 +37,12 @@ function pingDevices() {
     pings = {};
     var keys:Array<string> = Object.keys(devices);
     for(var i:number = 1; i < keys.length; i++) {
-        const key = keys[i];
+        const key:string = keys[i];
         if (key == "self") continue;
         pings[key] = false;
-        if (devices[key] != null && websockets[key] != null) {
-            websockets[key].send("{\"type\":\"ping\", \"data\":\"" + key + "\"}");
+        const tmpWs:any = websockets[key]
+        if (devices[key] != null && tmpWs != null) {
+            tmpWs.send("{\"type\":\"ping\", \"data\":\"" + key + "\"}");
         }
     }
     setTimeout(() => {
@@ -49,62 +50,63 @@ function pingDevices() {
         var keys2:Array<string> = Object.keys(devices);
         for(var i:number = 0; i < keys2.length; i++) {
             const key = keys2[i];
-            if (devices[key] != null && key != "self") {
-                if (!pings[key]) {
-                    //and if they didnt count them as disconnected and remove them from the database
-                    if (websockets[key] != null) { websockets[key].close(); delete websockets[key]; }
-                    var oldDevice:any = {public:true,name:key}
-                    if (devices[key]) { oldDevice = devices[key]!;
-                    delete devices[key]; }
+            if (key == "self") continue;
+            const device:Device|null = devices[key];
+            if (device == null) continue;
+            if (pings[key] == true) continue;
+            //and if they didnt count them as disconnected and remove them from the database
+            if (websockets[key] != null) { websockets[key].close(); delete websockets[key]; }
+            var oldDevice:any = {public:true,name:key}
+            if (device != null) { oldDevice = device!; delete devices[key]; }
 
-                    //remove subscriptions made by that device
-                    const connectKeys = Object.keys(connectionSubscriptions);
-                    for (let i = 0; i < connectKeys.length; i++) {
-                        const key = connectKeys[i];
-                        const subs = connectionSubscriptions[key];
-                        let numSubs = subs.length
-                        for (let j = 0; j < subs.length; j++) {
-                            if (devices[subs[j][0].toLowerCase()] != null && websockets[subs[j][0].toLowerCase()] != null) continue;
-                            numSubs--; delete subs[j];
-                        }
-                        if (numSubs==0) delete connectionSubscriptions[key];
-                        else connectionSubscriptions[key] = subs.filter((el:any)=>el!=null)
-                    }
-                    const disconnectKeys = Object.keys(disconnectionSubscriptions);
-                    for (let i = 0; i < disconnectKeys.length; i++) {
-                        const key = disconnectKeys[i];
-                        const subs = disconnectionSubscriptions[key];
-                        let numSubs = subs.length
-                        for (let j = 0; j < subs.length; j++) {
-                            if (devices[subs[j][0].toLowerCase()] != null && websockets[subs[j][0].toLowerCase()] != null) continue;
-                            numSubs--; delete subs[j];
-                        }
-                        if (numSubs==0) delete disconnectionSubscriptions[key];
-                        else disconnectionSubscriptions[key] = subs.filter((el:any)=>el!=null)
-                    }
+            //remove subscriptions made by that device
+            const connectKeys = Object.keys(connectionSubscriptions);
+            for (let j = 0; j < connectKeys.length; j++) {
+                const key = connectKeys[j];
+                const subs = connectionSubscriptions[key];
+                let numSubs = subs.length
+                for (let k = 0; k < subs.length; k++) {
+                    const name:string = subs[k][0].toLowerCase();
+                    if (devices[name] != null && websockets[name] != null) continue;
+                    numSubs--; delete connectionSubscriptions[key][k];
+                }
+                if (numSubs==0) delete connectionSubscriptions[key];
+                else connectionSubscriptions[key] = subs.filter((el:any)=>el!=null)
+            }
+            const disconnectKeys = Object.keys(disconnectionSubscriptions);
+            for (let j = 0; j < disconnectKeys.length; j++) {
+                const key = disconnectKeys[j];
+                const subs = disconnectionSubscriptions[key];
+                let numSubs = subs.length
+                for (let k = 0; k < subs.length; k++) {
+                    const name:string = subs[k][0].toLowerCase();
+                    if (devices[name] != null && websockets[name] != null) continue;
+                    numSubs--; delete subs[k];
+                }
+                if (numSubs==0) delete disconnectionSubscriptions[key];
+                else disconnectionSubscriptions[key] = subs.filter((el:any)=>el!=null)
+            }
 
-                    if (key.startsWith("web")) { continue; }// if its a browser made device, skip next steps
-                    if (oldDevice.public) console.log(Colors.FgGr+"Device "+Colors.FgGre+"\"" + oldDevice.name + "\""+Colors.FgGr+" disconnected."+Colors.R);
+            if (key.startsWith("web")) continue;// if its a browser made device, skip next steps
+            if (oldDevice.public) console.log(Colors.FgGr+"Device "+Colors.FgGre+"\"" + oldDevice.name + "\""+Colors.FgGr+" disconnected."+Colors.R);
 
-                    //send disconnection subscriptions
-                    var DisconnSubs:any = disconnectionSubscriptions[key.toLowerCase()];
-                    if (DisconnSubs != null && (typeof DisconnSubs) == "object" && Array.isArray(DisconnSubs)) {
-                        for(var j:number = 0; j < DisconnSubs.length; j++) {
-                            handleCommand(JSON.parse("{\"type\":\"command\",\"data\":{\"device\":\"" + DisconnSubs[j][0] + "\",\"function\":\"" + DisconnSubs[j][1] + "\",\"parameters\":[\"" + key + "\"]}}"));
-                        }
-                    }
-                    var anyDisconnSubs:any = disconnectionSubscriptions["any"];
-                    if (anyDisconnSubs != null && (typeof anyDisconnSubs) == "object" && Array.isArray(anyDisconnSubs)) {
-                        for(var j:number = 0; j < anyDisconnSubs.length; j++) {
-                            if (websockets[anyDisconnSubs[j][0]] != null) {
-                                websockets[anyDisconnSubs[j][0]].send(JSON.stringify({
-                                    type:"command",
-                                    data:anyDisconnSubs[j][1] + "()",
-                                    parameters:[key]
-                                }));
-                            }
-                        }
-                    }
+            //send disconnection subscriptions
+            var DisconnSubs:any = disconnectionSubscriptions[key.toLowerCase()];
+            if (DisconnSubs != null && (typeof DisconnSubs) == "object" && Array.isArray(DisconnSubs)) {
+                for(var j:number = 0; j < DisconnSubs.length; j++) {
+                    handleCommand({type:"command",data:{device:DisconnSubs[j][0],function:DisconnSubs[j][1],parameters:[key]}});
+                }
+            }
+            var anyDisconnSubs:any = disconnectionSubscriptions["any"];
+            if (anyDisconnSubs != null && (typeof anyDisconnSubs) == "object" && Array.isArray(anyDisconnSubs)) {
+                for(var j:number = 0; j < anyDisconnSubs.length; j++) {
+                    const tmpWS:any = websockets[anyDisconnSubs[j][0]];
+                    if (tmpWS == null) continue;
+                    tmpWS.send(JSON.stringify({
+                        type:"command",
+                        data:anyDisconnSubs[j][1] + "()",
+                        parameters:[key]
+                    }));
                 }
             }
         }
@@ -129,176 +131,166 @@ ws.on('connection', (websocket:any) => {
                 case "connection": {
                     //check if valid data
                     //needs to have either nested objects or functions to call
-                    var connected:boolean = false;
-                    if (msg.data != null && msg.data.name != null) {
-                        function mapDevice(device:any, parentName?:string|null) {
-                            const DisplayName:string = ((parentName!=null)?(parentName+"."):(""))+device.name;
-                            const DisplayNameColor:string = ((parentName!=null)?(Colors.FgCy+parentName+Colors.FgGr+"."):(""))+Colors.FgCy+device.name;
-                            var newDevice:any = {};
-                            if ((typeof device.name) != "string") { websocket.send(JSON.stringify({type:"reply",status:false,statusCode:401,reply:"failure",id:msg.id,error:"device.name is not a string."})); console.log(Colors.FgGr+"invalid connection: "+((parentName!=null)?(Colors.FgCy+parentName+Colors.FgGr+"."):(""))+Colors.FgCy+"device"+Colors.FgGr+"."+Colors.FgCy+"name "+Colors.FgRe+"is not a string"+Colors.FgGr+"."+Colors.R); return false; }
-                            newDevice.name   = device.name;
-                            try { if ((typeof device.public) == "string") device.public = JSON.parse(device.public);
-                            } catch (err:any) { websocket.send(JSON.stringify({type:"reply",status:false,statusCode:402,reply:"failure",id:msg.id,error:(((parentName!=null)?(parentName+"."):(""))+newDevice.name+".public is not a boolean.")})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.FgCy+"public"+Colors.FgRe+" is not a boolean"+Colors.FgGr+"."+Colors.R); return false; }
-                            if ((typeof device.public) != "boolean" && device.public != null) { websocket.send(JSON.stringify({type:"reply",status:false,statusCode:403,reply:"failure",id:msg.id,error:(((parentName!=null)?(parentName+"."):(""))+newDevice.name+".public is not a boolean.")})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.FgCy+"public "+Colors.FgRe+"is not a boolean"+Colors.FgGr+"."+Colors.R); return false; }
-                            newDevice.public = ((device.public!=null)?device.public:true);
+                    const fail:()=>void = ()=>{
+                        if (msg.data != null && msg.data.name != null) return;
+                        console.log(Colors.FgGr+"invalid connection from "+Colors.FgGre+"\"unknown\""+Colors.FgGr+"."+Colors.R);
+                    };
+                    if (msg.data == null || msg.data.name == null) { fail(); break; }
+                    function mapDevice(device:any, parentName?:string|null) {
+                        const DisplayName:string = ((parentName!=null)?(parentName+"."):(""))+device.name;
+                        const DisplayNameColor:string = ((parentName!=null)?(Colors.FgCy+parentName+Colors.FgGr+"."):(""))+Colors.FgCy+device.name;
+                        var newDevice:any = {};
+                        if ((typeof device.name) != "string") { websocket.send(JSON.stringify({type:"reply",status:false,statusCode:401,reply:"failure",id:msg.id,error:"device.name is not a string."})); console.log(Colors.FgGr+"invalid connection: "+((parentName!=null)?(Colors.FgCy+parentName+Colors.FgGr+"."):(""))+Colors.FgCy+"device"+Colors.FgGr+"."+Colors.FgCy+"name "+Colors.FgRe+"is not a string"+Colors.FgGr+"."+Colors.R); return false; }
+                        newDevice.name   = device.name;
+                        try { if ((typeof device.public) == "string") device.public = JSON.parse(device.public);
+                        } catch (err:any) { websocket.send(JSON.stringify({type:"reply",status:false,statusCode:402,reply:"failure",id:msg.id,error:(((parentName!=null)?(parentName+"."):(""))+newDevice.name+".public is not a boolean.")})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.FgCy+"public"+Colors.FgRe+" is not a boolean"+Colors.FgGr+"."+Colors.R); return false; }
+                        if ((typeof device.public) != "boolean" && device.public != null) { websocket.send(JSON.stringify({type:"reply",status:false,statusCode:403,reply:"failure",id:msg.id,error:(((parentName!=null)?(parentName+"."):(""))+newDevice.name+".public is not a boolean.")})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.FgCy+"public "+Colors.FgRe+"is not a boolean"+Colors.FgGr+"."+Colors.R); return false; }
+                        newDevice.public = ((device.public!=null)?device.public:true);
 
-                            if (device.functions != null) {
-                                if ((typeof device.functions) != "object") { websocket.send(JSON.stringify({type:"reply",status:false,statusCode:405,reply:"failure",id:msg.id,error:(DisplayName+".functions is not an object.")})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.FgCy+"functions "+Colors.FgRe+"is not an object"+Colors.FgGr+"."+Colors.R); return false; }
-                                newDevice.functions = {};
-                                function mapParameters(param:any,funcIndex:number|string,index:number) {
-                                    const DisplayName:string = ((parentName!=null)?(parentName+"."):(""))+newDevice.name+".functions["+(((typeof funcIndex)=="number")?(funcIndex):("\""+funcIndex+"\""))+"].parameters["+index+"]";
-                                    const DisplayNameColor:string = ((parentName!=null)?(Colors.FgCy+parentName+Colors.FgGr+"."):(""))+Colors.FgCy+newDevice.name+Colors.FgGr+"."+Colors.FgCy+"functions"+Colors.FgGr+"["+(((typeof funcIndex)=="number")?(Colors.FgYe+funcIndex):(Colors.FgGre+"\""+funcIndex+"\""))+Colors.FgGr+"]"+Colors.FgGr+"."+Colors.FgCy+"parameters"+Colors.FgGr+"["+Colors.FgYe+index+Colors.FgGr+"]"+Colors.R;
+                        if (device.functions != null) {
+                            if ((typeof device.functions) != "object") { websocket.send(JSON.stringify({type:"reply",status:false,statusCode:405,reply:"failure",id:msg.id,error:(DisplayName+".functions is not an object.")})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.FgCy+"functions "+Colors.FgRe+"is not an object"+Colors.FgGr+"."+Colors.R); return false; }
+                            newDevice.functions = {};
+                            function mapParameters(param:any,funcIndex:number|string,index:number) {
+                                const DisplayName:string = ((parentName!=null)?(parentName+"."):(""))+newDevice.name+".functions["+(((typeof funcIndex)=="number")?(funcIndex):("\""+funcIndex+"\""))+"].parameters["+index+"]";
+                                const DisplayNameColor:string = ((parentName!=null)?(Colors.FgCy+parentName+Colors.FgGr+"."):(""))+Colors.FgCy+newDevice.name+Colors.FgGr+"."+Colors.FgCy+"functions"+Colors.FgGr+"["+(((typeof funcIndex)=="number")?(Colors.FgYe+funcIndex):(Colors.FgGre+"\""+funcIndex+"\""))+Colors.FgGr+"]"+Colors.FgGr+"."+Colors.FgCy+"parameters"+Colors.FgGr+"["+Colors.FgYe+index+Colors.FgGr+"]"+Colors.R;
 
-                                    if ((typeof param.name) != "string") { websocket.send(JSON.stringify({type:"reply",status:false,statusCode:406,reply:"failure",id:msg.id,error:(DisplayName+".name is not a string.")})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.FgCy+"name "+Colors.FgRe+"is not a string"+Colors.FgGr+"."+Colors.R); return false; }
-                                    if ((typeof param.type) != "string") { websocket.send(JSON.stringify({type:"reply",status:false,statusCode:407,reply:"failure",id:msg.id,error:(DisplayName+".type is not a string.")})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.FgCy+"type "+Colors.FgRe+"is not a string"+Colors.FgGr+"."+Colors.R); return false; }
-                                    param.type = param.type.toLowerCase();
-                                    if (param.type != "string" && param.type != "number" && param.type != "bool" && param.type != "boolean") { websocket.send(JSON.stringify({type:"reply",status:false,statusCode:408,reply:"failure",id:msg.id,error:(DisplayName+".type is not a valid type.")})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.FgCy+"type "+Colors.FgRe+"is not a valid type"+Colors.FgGr+"."+Colors.R); return false; }
-                                    try { if ((typeof param.nullable) == "string") param.nullable = JSON.parse(param.nullable);
-                                    } catch (err:any) { websocket.send(JSON.stringify({type:"reply",status:false,statusCode:409,reply:"failure",id:msg.id,error:(DisplayName+".nullable is not a boolean.")})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.FgCy+"nullable "+Colors.FgRe+"is not a boolean"+Colors.FgGr+"."+Colors.R); return false; }
-                                    if ((typeof param.nullable) != "boolean" && param.nullable != null) { websocket.send(JSON.stringify({type:"reply",status:false,statusCode:410,reply:"failure",id:msg.id,error:(DisplayName+".nullable is not a boolean.")})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.FgCy+"nullable "+Colors.FgRe+"is not a boolean"+Colors.FgGr+"."+Colors.R); return false; }
-                                    //TEST THIS
-                                    
-                                    var out:any = {"name":param.name,"type":param.type,"nullable":((param.nullable!=null)?param.nullable:true)}
-                                    if (param.defaultValue != null) out.defaultValue = param.defaultValue;
-                                    return out;
-                                }
-                                function mapFunction(func:any,index:number|string) {
-                                    const DisplayName:string = ((parentName!=null)?(parentName+"."):(""))+newDevice.name+".functions["+(((typeof index) == "number")?(index):("\""+index+"\""))+"]";
-                                    const DisplayNameColor:string = ((parentName!=null)?(Colors.FgCy+parentName+Colors.FgGr+"."):(""))+Colors.FgCy+newDevice.name+Colors.FgGr+"."+Colors.FgCy+"functions"+(((typeof index) == "number")?(Colors.FgGr+"["+Colors.FgYe+index+Colors.FgGr+"]"):(Colors.FgGr+"["+Colors.FgGre+"\""+index+"\""+Colors.FgGr+"]"))+Colors.R;
-
-                                    var newFunc:any = {};
-                                    if ((typeof func.name) != "string") { websocket.send(JSON.stringify({type:"reply",status:false,statusCode:411,reply:"failure",id:msg.id,error:(DisplayName+".name is not a string")})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.FgCy+"name "+Colors.FgRe+"is not a string"+Colors.FgGr+"."+Colors.R); return false; }
-                                    newFunc.name = func.name;
-                                    try { if ((typeof func.public) == "string") func.public = JSON.parse(func.public);
-                                    } catch (err:any) { websocket.send(JSON.stringify({type:"reply",status:false,statusCode:412,reply:"failure",id:msg.id,error:(DisplayName+".public is not a boolean")})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.FgCy+"public "+Colors.FgRe+"is not a boolean"+Colors.FgGr+"."+Colors.R); return false; }
-                                    if ((typeof func.public) != "boolean" && func.public != null) { websocket.send(JSON.stringify({type:"reply",status:false,statusCode:413,reply:"failure",id:msg.id,error:(DisplayName+".public is not a boolean")})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.FgCy+"public "+Colors.FgRe+"is not a boolean"+Colors.FgGr+"."+Colors.R); return false; }
-                                    newFunc.public = ((func.public!=null)?func.public:true);
-                                    if ((typeof func.parameters) != "object" || !Array.isArray(func.parameters)) { websocket.send(JSON.stringify({type:"reply",status:false,statusCode:414,reply:"failure",id:msg.id,error:(DisplayName+".parameters is not an object")})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.FgCy+"parameters "+Colors.FgRe+"is not an object"+Colors.FgGr+"."+Colors.R); return false; }
-                                    newFunc.parameters = [];
-                                    for (let i = 0; i < func.parameters.length; i++) {
-                                        const parameter = func.parameters[i];
-                                        const tmp:any = mapParameters(parameter,index,i);
-                                        if (tmp == false) { return false; }
-                                        newFunc.parameters.push(tmp);
-                                    }
-                                    return newFunc
-                                }
-                                if (Array.isArray(device.functions)) {
-                                    for (let i = 0; i < device.functions.length; i++) {
-                                        const func:any = device.functions[i];
-                                        const tmp:any = mapFunction(func,i);
-                                        if (tmp == false) { return false; }
-                                        else newDevice.functions[func.name.toLowerCase()] = tmp;
-                                    }
-                                } else {
-                                    const funcKeys:string[] = Object.keys(device.functions);
-                                    for (let i = 0; i < funcKeys.length; i++) {
-                                        const func:any = device.functions[funcKeys[i]];
-                                        const tmp:any = mapFunction(func,funcKeys[i]);
-                                        if (tmp == false) { return false; }
-                                        else newDevice.functions[func.name.toLowerCase()] = tmp;
-                                    }
-                                }
+                                if ((typeof param.name) != "string") { websocket.send(JSON.stringify({type:"reply",status:false,statusCode:406,reply:"failure",id:msg.id,error:(DisplayName+".name is not a string.")})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.FgCy+"name "+Colors.FgRe+"is not a string"+Colors.FgGr+"."+Colors.R); return false; }
+                                if ((typeof param.type) != "string") { websocket.send(JSON.stringify({type:"reply",status:false,statusCode:407,reply:"failure",id:msg.id,error:(DisplayName+".type is not a string.")})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.FgCy+"type "+Colors.FgRe+"is not a string"+Colors.FgGr+"."+Colors.R); return false; }
+                                param.type = param.type.toLowerCase();
+                                if (param.type != "string" && param.type != "number" && param.type != "bool" && param.type != "boolean") { websocket.send(JSON.stringify({type:"reply",status:false,statusCode:408,reply:"failure",id:msg.id,error:(DisplayName+".type is not a valid type.")})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.FgCy+"type "+Colors.FgRe+"is not a valid type"+Colors.FgGr+"."+Colors.R); return false; }
+                                try { if ((typeof param.nullable) == "string") param.nullable = JSON.parse(param.nullable);
+                                } catch (err:any) { websocket.send(JSON.stringify({type:"reply",status:false,statusCode:409,reply:"failure",id:msg.id,error:(DisplayName+".nullable is not a boolean.")})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.FgCy+"nullable "+Colors.FgRe+"is not a boolean"+Colors.FgGr+"."+Colors.R); return false; }
+                                if ((typeof param.nullable) != "boolean" && param.nullable != null) { websocket.send(JSON.stringify({type:"reply",status:false,statusCode:410,reply:"failure",id:msg.id,error:(DisplayName+".nullable is not a boolean.")})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.FgCy+"nullable "+Colors.FgRe+"is not a boolean"+Colors.FgGr+"."+Colors.R); return false; }
+                                //TEST THIS
+                                
+                                var out:any = {"name":param.name,"type":param.type,"nullable":((param.nullable!=null)?param.nullable:true)}
+                                if (param.defaultValue != null) out.defaultValue = param.defaultValue;
+                                return out;
                             }
-                            if (device.devices != null) {
-                                if ((typeof device.devices) != "object") { websocket.send(JSON.stringify({type:"reply",status:false,statusCode:415,reply:"failure",id:msg.id,error:(DisplayName+".devices is not an object")})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.R+Colors.FgCy+"devices "+Colors.FgRe+"is not an object"+Colors.FgGr+"."+Colors.R); return false; }
-                                newDevice.devices = {};
-                                if (Array.isArray(device.devices)) {
-                                    for (let i = 0; i < device.devices.length; i++) {
-                                        const childDevice:any = device.devices[i];
-                                        if ((typeof childDevice.name) != "string") { websocket.send(JSON.stringify({type:"reply",status:false,statusCode:416,reply:"failure",id:msg.id,error:(DisplayName+".\"device\".name is not an string")})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.R+Colors.FgCy+"device"+Colors.FgGr+"."+Colors.R+Colors.FgCy+"name "+Colors.FgRe+"is not a string"+Colors.FgGr+"."+Colors.R); return false; }
-                                        const tmp:any = mapDevice(childDevice, ((parentName!=null)?(parentName+"."):(""))+device.name);
-                                        if (tmp == false) { return false; }
-                                        else newDevice.devices[childDevice.name.toLowerCase()] = tmp;
-                                    }
-                                } else {
-                                    const funcKeys:string[] = Object.keys(device.devices);
-                                    for (let i = 0; i < funcKeys.length; i++) {
-                                        const childDevice:any = device.devices[funcKeys[i]];
-                                        if ((typeof childDevice.name) != "string") { websocket.send(JSON.stringify({type:"reply",status:false,statusCode:417,reply:"failure",id:msg.id,error:(DisplayName+".\"device\".name is not an string")})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.R+Colors.FgCy+"device"+Colors.FgGr+"."+Colors.R+Colors.FgCy+"name "+Colors.FgRe+"is not a string"+Colors.FgGr+"."+Colors.R); return false; }
-                                        const tmp:any = mapDevice(childDevice, ((parentName!=null)?(parentName+"."):(""))+device.name);
-                                        if (tmp == false) { return false; }
-                                        else newDevice.devices[childDevice.name.toLowerCase()] = tmp;
-                                    }
-                                }
-                            }
-                            if ((device.devices   == null || Object.keys(device.devices  ).length <= 0) &&
-                                (device.functions == null || Object.keys(device.functions).length <= 0)
-                            ) { websocket.send(JSON.stringify({type:"reply",status:false,statusCode:418,reply:"failure",id:msg.id,error:"The server refuses to brew coffee because it is, permanently, a teapot."})); console.log(Colors.FgGr+"invalid connection: "+Colors.FgRe+"pointless device "+Colors.FgGre+"\"" + DisplayNameColor+Colors.FgGre+"\""+Colors.FgGr+"."+Colors.R); return false; }// status code 418
-                            return newDevice;
-                        }
-                        const tmp:any = mapDevice(msg.data);
-                        if (tmp != false) {
-                            const ogMsgId:string|number = msg.data.id;
-                            msg.data = tmp;
-                            if (websockets[msg.data.name.toLowerCase()] == null && devices[msg.data.name.toLowerCase()] == null) {
-                                //add device data to list
-                                devices[msg.data.name.toLowerCase()] = msg.data;
-                                //add websocket connection to list
-                                websockets[msg.data.name.toLowerCase()] = websocket;
-                                //response
-                                websocket.send(JSON.stringify({type:"reply",status:true,statusCode:200,reply:"success",id:ogMsgId}));
-                                if (msg.data.public) console.log(Colors.FgGr+"Device "+Colors.FgGre+"\"" + msg.data.name + "\""+Colors.FgGr+" conneced"+Colors.FgGr+"."+Colors.R);
-                                connected = true;
+                            function mapFunction(func:any,index:number|string) {
+                                const DisplayName:string = ((parentName!=null)?(parentName+"."):(""))+newDevice.name+".functions["+(((typeof index) == "number")?(index):("\""+index+"\""))+"]";
+                                const DisplayNameColor:string = ((parentName!=null)?(Colors.FgCy+parentName+Colors.FgGr+"."):(""))+Colors.FgCy+newDevice.name+Colors.FgGr+"."+Colors.FgCy+"functions"+(((typeof index) == "number")?(Colors.FgGr+"["+Colors.FgYe+index+Colors.FgGr+"]"):(Colors.FgGr+"["+Colors.FgGre+"\""+index+"\""+Colors.FgGr+"]"))+Colors.R;
 
-                                if (msg.data.name.toLowerCase() == "nanopi") {
-                                    handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"nanopi\",\"function\":\"Subscribe\",\"parameters\":[1,\"self.spotify\",\"skipprevious\",\"\\\""+Spotify.defaultAccount+"\\\"\"]}}");
-                                    handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"nanopi\",\"function\":\"Subscribe\",\"parameters\":[2,\"self.spotify\",\"toggle\",\"\\\""+Spotify.defaultAccount+"\\\"\"]}}");
-                                    handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"nanopi\",\"function\":\"Subscribe\",\"parameters\":[3,\"self.spotify\",\"skipnext\",\"\\\""+Spotify.defaultAccount+"\\\"\"]}}");
+                                var newFunc:any = {};
+                                if ((typeof func.name) != "string") { websocket.send(JSON.stringify({type:"reply",status:false,statusCode:411,reply:"failure",id:msg.id,error:(DisplayName+".name is not a string")})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.FgCy+"name "+Colors.FgRe+"is not a string"+Colors.FgGr+"."+Colors.R); return false; }
+                                newFunc.name = func.name;
+                                try { if ((typeof func.public) == "string") func.public = JSON.parse(func.public);
+                                } catch (err:any) { websocket.send(JSON.stringify({type:"reply",status:false,statusCode:412,reply:"failure",id:msg.id,error:(DisplayName+".public is not a boolean")})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.FgCy+"public "+Colors.FgRe+"is not a boolean"+Colors.FgGr+"."+Colors.R); return false; }
+                                if ((typeof func.public) != "boolean" && func.public != null) { websocket.send(JSON.stringify({type:"reply",status:false,statusCode:413,reply:"failure",id:msg.id,error:(DisplayName+".public is not a boolean")})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.FgCy+"public "+Colors.FgRe+"is not a boolean"+Colors.FgGr+"."+Colors.R); return false; }
+                                newFunc.public = ((func.public!=null)?func.public:true);
+                                if ((typeof func.parameters) != "object" || !Array.isArray(func.parameters)) { websocket.send(JSON.stringify({type:"reply",status:false,statusCode:414,reply:"failure",id:msg.id,error:(DisplayName+".parameters is not an object")})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.FgCy+"parameters "+Colors.FgRe+"is not an object"+Colors.FgGr+"."+Colors.R); return false; }
+                                newFunc.parameters = [];
+                                for (let i = 0; i < func.parameters.length; i++) {
+                                    const parameter = func.parameters[i];
+                                    const tmp:any = mapParameters(parameter,index,i);
+                                    if (tmp == false) { return false; }
+                                    newFunc.parameters.push(tmp);
                                 }
-                                if (msg.data.name.toLowerCase() == "controller") {
-                                    handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"controller\",\"function\":\"Subscribe\",\"parameters\":[7,\"self.spotify\",\"skipprevious\",\"\\\""+Spotify.defaultAccount+"\\\"\"]}}");
-                                    handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"controller\",\"function\":\"Subscribe\",\"parameters\":[6,\"self.spotify\",\"toggle\",\"\\\""+Spotify.defaultAccount+"\\\"\"]}}");
-                                    handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"controller\",\"function\":\"Subscribe\",\"parameters\":[5,\"self.spotify\",\"skipnext\",\"\\\""+Spotify.defaultAccount+"\\\"\"]}}");
+                                return newFunc
+                            }
+                            if (Array.isArray(device.functions)) {
+                                for (let i = 0; i < device.functions.length; i++) {
+                                    const func:any = device.functions[i];
+                                    const tmp:any = mapFunction(func,i);
+                                    if (tmp == false) { return false; }
+                                    else newDevice.functions[func.name.toLowerCase()] = tmp;
                                 }
-                                if (connectionSubscriptions[msg.data.name.toLowerCase()] != null && (typeof connectionSubscriptions[msg.data.name.toLowerCase()]) == "object" && Array.isArray(connectionSubscriptions[msg.data.name.toLowerCase()])) {
-                                    for(var i:number = 0; i < connectionSubscriptions[msg.data.name.toLowerCase()].length; i++) {
-                                        handleCommand(JSON.parse("{\"type\":\"command\",\"data\":{\"device\":\"" + connectionSubscriptions[msg.data.name.toLowerCase()][i][0] + "\",\"function\":\"" + connectionSubscriptions[msg.data.name.toLowerCase()][i][1] + "\",\"parameters\":[\"" + msg.data.name + "\"]}}"));
-                                    }
-                                }
-                                if (connectionSubscriptions["any"] != null && (typeof connectionSubscriptions["any"]) == "object" && Array.isArray(connectionSubscriptions["any"])) {
-                                    for(var i:number = 0; i < connectionSubscriptions["any"].length; i++) {
-                                        if (websockets[connectionSubscriptions["any"][i][0]] != null) {
-                                            websockets[connectionSubscriptions["any"][i][0]].send(JSON.stringify({
-                                                type:"command",
-                                                data:connectionSubscriptions["any"][i][1] + "()",
-                                                parameters:[msg.data.name,msg.data]
-                                            }));
-                                        }
-                                    }
+                            } else {
+                                const funcKeys:string[] = Object.keys(device.functions);
+                                for (let i = 0; i < funcKeys.length; i++) {
+                                    const func:any = device.functions[funcKeys[i]];
+                                    const tmp:any = mapFunction(func,funcKeys[i]);
+                                    if (tmp == false) { return false; }
+                                    else newDevice.functions[func.name.toLowerCase()] = tmp;
                                 }
                             }
                         }
+                        if (device.devices != null) {
+                            if ((typeof device.devices) != "object") { websocket.send(JSON.stringify({type:"reply",status:false,statusCode:415,reply:"failure",id:msg.id,error:(DisplayName+".devices is not an object")})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.R+Colors.FgCy+"devices "+Colors.FgRe+"is not an object"+Colors.FgGr+"."+Colors.R); return false; }
+                            newDevice.devices = {};
+                            if (Array.isArray(device.devices)) {
+                                for (let i = 0; i < device.devices.length; i++) {
+                                    const childDevice:any = device.devices[i];
+                                    if ((typeof childDevice.name) != "string") { websocket.send(JSON.stringify({type:"reply",status:false,statusCode:416,reply:"failure",id:msg.id,error:(DisplayName+".\"device\".name is not an string")})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.R+Colors.FgCy+"device"+Colors.FgGr+"."+Colors.R+Colors.FgCy+"name "+Colors.FgRe+"is not a string"+Colors.FgGr+"."+Colors.R); return false; }
+                                    const tmp:any = mapDevice(childDevice, ((parentName!=null)?(parentName+"."):(""))+device.name);
+                                    if (tmp == false) { return false; }
+                                    else newDevice.devices[childDevice.name.toLowerCase()] = tmp;
+                                }
+                            } else {
+                                const funcKeys:string[] = Object.keys(device.devices);
+                                for (let i = 0; i < funcKeys.length; i++) {
+                                    const childDevice:any = device.devices[funcKeys[i]];
+                                    if ((typeof childDevice.name) != "string") { websocket.send(JSON.stringify({type:"reply",status:false,statusCode:417,reply:"failure",id:msg.id,error:(DisplayName+".\"device\".name is not an string")})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.R+Colors.FgCy+"device"+Colors.FgGr+"."+Colors.R+Colors.FgCy+"name "+Colors.FgRe+"is not a string"+Colors.FgGr+"."+Colors.R); return false; }
+                                    const tmp:any = mapDevice(childDevice, ((parentName!=null)?(parentName+"."):(""))+device.name);
+                                    if (tmp == false) { return false; }
+                                    else newDevice.devices[childDevice.name.toLowerCase()] = tmp;
+                                }
+                            }
+                        }
+                        if ((device.devices   == null || Object.keys(device.devices  ).length <= 0) &&
+                            (device.functions == null || Object.keys(device.functions).length <= 0)
+                        ) { websocket.send(JSON.stringify({type:"reply",status:false,statusCode:418,reply:"failure",id:msg.id,error:"The server refuses to brew coffee because it is, permanently, a teapot."})); console.log(Colors.FgGr+"invalid connection: "+Colors.FgRe+"pointless device "+Colors.FgGre+"\"" + DisplayNameColor+Colors.FgGre+"\""+Colors.FgGr+"."+Colors.R); return false; }// status code 418
+                        return newDevice;
                     }
-                    if (!connected) {
-                        if (msg.data == null || msg.data.name == null) { console.log(Colors.FgGr+"invalid connection from "+Colors.FgGre+"\"unknown\""+Colors.FgGr+"."+Colors.R); }
-                    }
+                    const tmp:any = mapDevice(msg.data);
+                    if (tmp == false) { fail(); break; }
+                    const ogMsgId:string|number = msg.data.id;
+                        msg.data = tmp;
+                        if (websockets[msg.data.name.toLowerCase()] == null && devices[msg.data.name.toLowerCase()] == null) {
+                            //add device data to list
+                            devices[msg.data.name.toLowerCase()] = msg.data;
+                            //add websocket connection to list
+                            websockets[msg.data.name.toLowerCase()] = websocket;
+                            //response
+                            websocket.send(JSON.stringify({type:"reply",status:true,statusCode:200,reply:"success",id:ogMsgId}));
+                            if (msg.data.public) console.log(Colors.FgGr+"Device "+Colors.FgGre+"\"" + msg.data.name + "\""+Colors.FgGr+" conneced"+Colors.FgGr+"."+Colors.R);
+
+                            if (msg.data.name.toLowerCase() == "nanopi") {
+                                handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"nanopi\",\"function\":\"Subscribe\",\"parameters\":[1,\"self.spotify\",\"skipprevious\",\"\\\""+Spotify.defaultAccount+"\\\"\"]}}");
+                                handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"nanopi\",\"function\":\"Subscribe\",\"parameters\":[2,\"self.spotify\",\"toggle\",\"\\\""+Spotify.defaultAccount+"\\\"\"]}}");
+                                handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"nanopi\",\"function\":\"Subscribe\",\"parameters\":[3,\"self.spotify\",\"skipnext\",\"\\\""+Spotify.defaultAccount+"\\\"\"]}}");
+                            } else if (msg.data.name.toLowerCase() == "controller") {
+                                handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"controller\",\"function\":\"Subscribe\",\"parameters\":[7,\"self.spotify\",\"skipprevious\",\"\\\""+Spotify.defaultAccount+"\\\"\"]}}");
+                                handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"controller\",\"function\":\"Subscribe\",\"parameters\":[6,\"self.spotify\",\"toggle\",\"\\\""+Spotify.defaultAccount+"\\\"\"]}}");
+                                handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"controller\",\"function\":\"Subscribe\",\"parameters\":[5,\"self.spotify\",\"skipnext\",\"\\\""+Spotify.defaultAccount+"\\\"\"]}}");
+                            }
+                            if (connectionSubscriptions[msg.data.name.toLowerCase()] != null && (typeof connectionSubscriptions[msg.data.name.toLowerCase()]) == "object" && Array.isArray(connectionSubscriptions[msg.data.name.toLowerCase()])) {
+                                for(var i:number = 0; i < connectionSubscriptions[msg.data.name.toLowerCase()].length; i++) {
+                                    handleCommand(JSON.parse("{\"type\":\"command\",\"data\":{\"device\":\"" + connectionSubscriptions[msg.data.name.toLowerCase()][i][0] + "\",\"function\":\"" + connectionSubscriptions[msg.data.name.toLowerCase()][i][1] + "\",\"parameters\":[\"" + msg.data.name + "\"]}}"));
+                                }
+                            }
+                            if (connectionSubscriptions["any"] != null && (typeof connectionSubscriptions["any"]) == "object" && Array.isArray(connectionSubscriptions["any"])) {
+                                for(var i:number = 0; i < connectionSubscriptions["any"].length; i++) {
+                                    if (websockets[connectionSubscriptions["any"][i][0]] == null) continue;
+                                    websockets[connectionSubscriptions["any"][i][0]].send(JSON.stringify({
+                                        type:"command",
+                                        data:connectionSubscriptions["any"][i][1] + "()",
+                                        parameters:[msg.data.name,msg.data]
+                                    }));
+                                }
+                            }
+                        }
                     break;
                 }
                 case "command": {
                     //console.log("command: \n" + message + "\n");
-                    if (msg.data != null) {
-                        if (msg.data.device     == null) { console.log(msg); websocket.send(JSON.stringify({type:"status",status:false,statusCode:402,error:"Command device is invalid"    ,id:msg.id})); console.log(Colors.FgGr+"Invalid command:"+Colors.FgGr+" Command"+Colors.FgRe+" missing target device"      +Colors.FgGr+"."+Colors.R); return; }
-                        if (msg.data.function   == null) { console.log(msg); websocket.send(JSON.stringify({type:"status",status:false,statusCode:403,error:"Command function is invalid"  ,id:msg.id})); console.log(Colors.FgGr+"Invalid command:"+Colors.FgGr+" Command"+Colors.FgRe+" missing target function"    +Colors.FgGr+"."+Colors.R); return; }
-                        if (msg.data.parameters == null) { console.log(msg); websocket.send(JSON.stringify({type:"status",status:false,statusCode:405,error:"Command parameters is invalid",id:msg.id})); console.log(Colors.FgGr+"Invalid command:"+Colors.FgGr+" Command"+Colors.FgRe+" missing function parameters"+Colors.FgGr+"."+Colors.R); return; }
+                    if (msg.data            == null) { console.log(msg); websocket.send(JSON.stringify({type:"status",status:false,statusCode:402,error:"Command data is invalid"      ,id:msg.id})); console.log(Colors.FgGr+"Invalid command:"+Colors.FgGr+" Command"+Colors.FgRe+" missing command data"       +Colors.FgGr+"."+Colors.R); return; }
+                    if (msg.data.device     == null) { console.log(msg); websocket.send(JSON.stringify({type:"status",status:false,statusCode:402,error:"Command device is invalid"    ,id:msg.id})); console.log(Colors.FgGr+"Invalid command:"+Colors.FgGr+" Command"+Colors.FgRe+" missing target device"      +Colors.FgGr+"."+Colors.R); return; }
+                    if (msg.data.function   == null) { console.log(msg); websocket.send(JSON.stringify({type:"status",status:false,statusCode:403,error:"Command function is invalid"  ,id:msg.id})); console.log(Colors.FgGr+"Invalid command:"+Colors.FgGr+" Command"+Colors.FgRe+" missing target function"    +Colors.FgGr+"."+Colors.R); return; }
+                    if (msg.data.parameters == null) { console.log(msg); websocket.send(JSON.stringify({type:"status",status:false,statusCode:405,error:"Command parameters is invalid",id:msg.id})); console.log(Colors.FgGr+"Invalid command:"+Colors.FgGr+" Command"+Colors.FgRe+" missing function parameters"+Colors.FgGr+"."+Colors.R); return; }
 
-                        handleCommand(msg as command, websocket);
-                    }
+                    handleCommand(msg as command, websocket);
                     break;
                 }
                 case "pong": {
                     //when receiving back a ping call the callback after error checking
-                    if (msg.data != null && (typeof msg.data) == "string") {
-                        pings[msg.data] = true;
-                    }
+                    if (msg.data == null || (typeof msg.data) != "string") break;
+                    pings[msg.data] = true;
                     break;
                 }
                 case "ping": {
-                    if (msg.data != null) {
-                        websocket.send("{\"type\":\"pong\",\"data\":\"" + msg.data + "\"}");
-                    } else if (msg.id != null) {
-                        websocket.send("{\"type\":\"pong\",\"id\":\"" + msg.id + "\"}");
-                    }
+                    if (msg.data != null) websocket.send("{\"type\":\"pong\",\"data\":\"" + msg.data + "\"}");
+                    else if (msg.id != null) websocket.send("{\"type\":\"pong\",\"id\":\"" + msg.id + "\"}");
                     break;
                 }
                 default: { websocket.send(JSON.stringify({type:"status",status:false,statusCode:406,error:"Command type is invalid",id:msg.id})); console.log(Colors.FgGr+"Invalid command:"+Colors.FgRe+" Invalid message type"+Colors.FgGre+" \""+msg.type+"\""+Colors.FgGr+"."+Colors.R); }
@@ -378,12 +370,12 @@ function handleCommand(msg:string|command, websocket?:any) {
                                             "connect":{
                                                 name:"connect",
                                                 parameters:[ {name:"device",type:"string",nullable:false} ],
-                                                public:true
+                                                public:false
                                             },
                                             "disconnect":{
                                                 name:"disconnect",
                                                 parameters:[ {name:"device",type:"string",nullable:false} ],
-                                                public:true
+                                                public:false
                                             }
                                         },
                                         devices: {}, public:false

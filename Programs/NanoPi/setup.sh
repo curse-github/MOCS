@@ -14,8 +14,7 @@ sudo npm install -g ts-node
 sudo /bin/cp /home/pi/main.c /root/NanoHatOLED/Source/main.c
 sudo /usr/bin/gcc /root/NanoHatOLED/Source/daemonize.c /root/NanoHatOLED/Source/main.c -lrt -lpthread -o /root/NanoHatOLED/NanoHatOLED
 sudo rm /home/pi/main.c
-sudo rm /home/pi/clear.py
-sudo rm /home/pi/line.py
+sudo rm -R /home/pi/otherThingsLol
 sudo rm /home/pi/Procedure.txt
 sudo rm /home/pi/setup.sh
 sudo reboot now
