@@ -40,7 +40,7 @@ function pingDevices() {
         const key:string = keys[i];
         if (key == "self") continue;
         pings[key] = false;
-        const tmpWs:any = websockets[key]
+        const tmpWs:any = websockets[key];
         if (devices[key] != null && tmpWs != null) {
             tmpWs.send("{\"type\":\"ping\", \"data\":\"" + key + "\"}");
         }
@@ -64,7 +64,7 @@ function pingDevices() {
             for (let j = 0; j < connectKeys.length; j++) {
                 const key = connectKeys[j];
                 const subs = connectionSubscriptions[key];
-                let numSubs = subs.length
+                let numSubs = subs.length;
                 for (let k = 0; k < subs.length; k++) {
                     const name:string = subs[k][0].toLowerCase();
                     if (devices[name] != null && websockets[name] != null) continue;
@@ -84,7 +84,7 @@ function pingDevices() {
                     numSubs--; delete subs[k];
                 }
                 if (numSubs==0) delete disconnectionSubscriptions[key];
-                else disconnectionSubscriptions[key] = subs.filter((el:any)=>el!=null)
+                else disconnectionSubscriptions[key] = subs.filter((el:any)=>el!=null);
             }
 
             if (key.startsWith("web")) continue;// if its a browser made device, skip next steps
@@ -222,7 +222,7 @@ ws.on('connection', (websocket:any) => {
                                     const childDevice:any = device.devices[funcKeys[i]];
                                     if ((typeof childDevice.name) != "string") { websocket.send(JSON.stringify({type:"reply",status:false,statusCode:417,reply:"failure",id:msg.id,error:(DisplayName+".\"device\".name is not an string")})); console.log(Colors.FgGr+"invalid connection: "+DisplayNameColor+Colors.FgGr+"."+Colors.R+Colors.FgCy+"device"+Colors.FgGr+"."+Colors.R+Colors.FgCy+"name "+Colors.FgRe+"is not a string"+Colors.FgGr+"."+Colors.R); return false; }
                                     const tmp:any = mapDevice(childDevice, ((parentName!=null)?(parentName+"."):(""))+device.name);
-                                    if (tmp == false) { return false; }
+                                    if (tmp == false) return false;
                                     else newDevice.devices[childDevice.name.toLowerCase()] = tmp;
                                 }
                             }
@@ -235,41 +235,43 @@ ws.on('connection', (websocket:any) => {
                     const tmp:any = mapDevice(msg.data);
                     if (tmp == false) { fail(); break; }
                     const ogMsgId:string|number = msg.data.id;
-                        msg.data = tmp;
-                        if (websockets[msg.data.name.toLowerCase()] == null && devices[msg.data.name.toLowerCase()] == null) {
-                            //add device data to list
-                            devices[msg.data.name.toLowerCase()] = msg.data;
-                            //add websocket connection to list
-                            websockets[msg.data.name.toLowerCase()] = websocket;
-                            //response
-                            websocket.send(JSON.stringify({type:"reply",status:true,statusCode:200,reply:"success",id:ogMsgId}));
-                            if (msg.data.public) console.log(Colors.FgGr+"Device "+Colors.FgGre+"\"" + msg.data.name + "\""+Colors.FgGr+" conneced"+Colors.FgGr+"."+Colors.R);
-
-                            if (msg.data.name.toLowerCase() == "nanopi") {
-                                handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"nanopi\",\"function\":\"Subscribe\",\"parameters\":[1,\"self.spotify\",\"skipprevious\",\"\\\""+Spotify.defaultAccount+"\\\"\"]}}");
-                                handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"nanopi\",\"function\":\"Subscribe\",\"parameters\":[2,\"self.spotify\",\"toggle\",\"\\\""+Spotify.defaultAccount+"\\\"\"]}}");
-                                handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"nanopi\",\"function\":\"Subscribe\",\"parameters\":[3,\"self.spotify\",\"skipnext\",\"\\\""+Spotify.defaultAccount+"\\\"\"]}}");
-                            } else if (msg.data.name.toLowerCase() == "controller") {
-                                handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"controller\",\"function\":\"Subscribe\",\"parameters\":[7,\"self.spotify\",\"skipprevious\",\"\\\""+Spotify.defaultAccount+"\\\"\"]}}");
-                                handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"controller\",\"function\":\"Subscribe\",\"parameters\":[6,\"self.spotify\",\"toggle\",\"\\\""+Spotify.defaultAccount+"\\\"\"]}}");
-                                handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"controller\",\"function\":\"Subscribe\",\"parameters\":[5,\"self.spotify\",\"skipnext\",\"\\\""+Spotify.defaultAccount+"\\\"\"]}}");
-                            }
-                            if (connectionSubscriptions[msg.data.name.toLowerCase()] != null && (typeof connectionSubscriptions[msg.data.name.toLowerCase()]) == "object" && Array.isArray(connectionSubscriptions[msg.data.name.toLowerCase()])) {
-                                for(var i:number = 0; i < connectionSubscriptions[msg.data.name.toLowerCase()].length; i++) {
-                                    handleCommand(JSON.parse("{\"type\":\"command\",\"data\":{\"device\":\"" + connectionSubscriptions[msg.data.name.toLowerCase()][i][0] + "\",\"function\":\"" + connectionSubscriptions[msg.data.name.toLowerCase()][i][1] + "\",\"parameters\":[\"" + msg.data.name + "\"]}}"));
-                                }
-                            }
-                            if (connectionSubscriptions["any"] != null && (typeof connectionSubscriptions["any"]) == "object" && Array.isArray(connectionSubscriptions["any"])) {
-                                for(var i:number = 0; i < connectionSubscriptions["any"].length; i++) {
-                                    if (websockets[connectionSubscriptions["any"][i][0]] == null) continue;
-                                    websockets[connectionSubscriptions["any"][i][0]].send(JSON.stringify({
-                                        type:"command",
-                                        data:connectionSubscriptions["any"][i][1] + "()",
-                                        parameters:[msg.data.name,msg.data]
-                                    }));
-                                }
+                    msg.data = tmp;
+                    if (websockets[msg.data.name.toLowerCase()] == null && devices[msg.data.name.toLowerCase()] == null) {
+                        //add device data and websocket connection to lists
+                        devices[msg.data.name.toLowerCase()] = msg.data;
+                        websockets[msg.data.name.toLowerCase()] = websocket;
+                        //response
+                        websocket.send(JSON.stringify({type:"reply",status:true,statusCode:200,reply:"success",id:ogMsgId}));
+                        if (msg.data.public) console.log(Colors.FgGr+"Device "+Colors.FgGre+"\"" + msg.data.name + "\""+Colors.FgGr+" conneced"+Colors.FgGr+"."+Colors.R);
+                        //special things
+                        if (msg.data.name.toLowerCase() == "nanopi") {
+                            handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"nanopi\",\"function\":\"Subscribe\",\"parameters\":[1,\"self.spotify\",\"skipprevious\",\""+Spotify.defaultAccount+"\"]}}");
+                            handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"nanopi\",\"function\":\"Subscribe\",\"parameters\":[2,\"self.spotify\",\"toggle\",\""+Spotify.defaultAccount+"\"]}}");
+                            handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"nanopi\",\"function\":\"Subscribe\",\"parameters\":[3,\"self.spotify\",\"skipnext\",\""+Spotify.defaultAccount+"\"]}}");
+                        } else if (msg.data.name.toLowerCase() == "controller") {
+                            handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"controller\",\"function\":\"Subscribe\",\"parameters\":[7,\"self.spotify\",\"skipprevious\",\""+Spotify.defaultAccount+"\"]}}");
+                            handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"controller\",\"function\":\"Subscribe\",\"parameters\":[6,\"self.spotify\",\"toggle\",\""+Spotify.defaultAccount+"\"]}}");
+                            handleCommand("{\"type\":\"command\",\"data\":{\"device\":\"controller\",\"function\":\"Subscribe\",\"parameters\":[5,\"self.spotify\",\"skipnext\",\""+Spotify.defaultAccount+"\"]}}");
+                        }
+                        //handle connection subs
+                        const sub = connectionSubscriptions[msg.data.name.toLowerCase()];
+                        if (sub != null && (typeof sub == "object" && Array.isArray(sub))) {
+                            for(var i:number = 0; i < sub.length; i++) {
+                                handleCommand(JSON.parse("{\"type\":\"command\",\"data\":{\"device\":\"" + sub[i][0] + "\",\"function\":\"" + sub[i][1] + "\",\"parameters\":[\"" + msg.data.name + "\"]}}"));
                             }
                         }
+                        const anySub = connectionSubscriptions["any"];
+                        if (anySub != null && (typeof anySub) == "object" && Array.isArray(anySub)) {
+                            for(var i:number = 0; i < anySub.length; i++) {
+                                if (websockets[anySub[i][0]] == null) continue;
+                                websockets[anySub[i][0]].send(JSON.stringify({
+                                    type:"command",
+                                    data:anySub[i][1] + "()",
+                                    parameters:[msg.data.name,msg.data]
+                                }));
+                            }
+                        }
+                    }
                     break;
                 }
                 case "command": {
@@ -298,6 +300,7 @@ ws.on('connection', (websocket:any) => {
         } catch (err:any) { websocket.send(JSON.stringify({type:"status",status:false,statusCode:407,error:"Command invalid json",message:err.message})); console.log(Colors.FgGr+"Invalid command:"+Colors.FgRe+" Unable to parse json of message"+Colors.FgGr+"."+Colors.R); console.log(message); console.log(err.message); console.log(err.stack); }
     });
 });
+//continue here
 function handleCommand(msg:string|command, websocket?:any) {
     if ((typeof msg) == "string") {
         assertIsString(msg);
@@ -306,7 +309,7 @@ function handleCommand(msg:string|command, websocket?:any) {
             if (json != null) {
                 handleCommand(json);
             } else { if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:408,error:"Command is null"})); } console.log(Colors.FgGr+"Invalid command:"+Colors.FgRe+" Command is"+Colors.FgCy+" null"+Colors.FgGr+"."+Colors.R); return; }
-        } catch (err:any) { console.log(err.stack + "    ln233"); }
+        } catch (err:any) { console.log(err.stack + "    ln310"); }
     } else if ((typeof msg) == "object"){
         assert(typeof msg == "object")
         if (msg.data.device.split(".")[0].toLowerCase() == "self") {
@@ -547,7 +550,7 @@ function findFunction(list:{[key:string]:Device|null},data:cmdData,websocket:any
                 } else if (Object.keys(list[shift]!.devices!).length <= 0) {
                     if (websocket!=null){ websocket.send(JSON.stringify({type:"status",status:false,statusCode:430,error:"Device does not have child \""+deviceNameSplit[0]+"\"",id:data.id})); } console.log(Colors.FgGr+"Invalid command:"+Colors.FgRe+" Device"+Colors.FgGre+" \""+shift+"\""+Colors.FgRe+" does not have child devices"+Colors.FgGr+"."+Colors.R);
                 } else {
-                    console.log("weird error ln531");
+                    console.log("weird error ln551");
                 }
                 return [false];
             }
@@ -744,7 +747,6 @@ var localdevices:{ [key:string]:LocalDevice } = {
                                 return;
                             }
                         }
-                        
                     } else { console.log(Colors.FgGr+"Internal error:"+Colors.FgYe+" Lamp"+Colors.FgCy+" is not connected"+Colors.FgGr+"."+Colors.R); res.send("error"); }
                 } catch (err:any) { console.log(err); }
             },
@@ -796,7 +798,7 @@ Object.keys(localdevices).forEach((i) => {
             if ((typeof localdevices[i].Rest[j]) == "function") {
                 app.get(j,function(req:any, res:any) {
                     try { localdevices[i].Rest[j](req, res);
-                    } catch (err:any) { console.log("err: " + err.stack + "  ln747") }
+                    } catch (err:any) { console.log("err: " + err.stack + "  ln800") }
                 });
             } else {
                 console.log(Colors.FgGr+"Internal error:"+Colors.FgCy+"localdevices"+Colors.FgGr+"["+Colors.FgYe+i+Colors.FgGr+"]."+Colors.FgCy+"Rest"+Colors.FgGr+"["+Colors.FgYe+j+Colors.FgGr+"]"+Colors.FgRe+" is not of type "+Colors.FgGre+" function"+Colors.FgGr+"."+Colors.R+Colors.R);
@@ -810,4 +812,4 @@ var server:any = app.listen(8081, function () {
     //var host:string = server.address().address;
     var port:number = server.address().port;
     console.log(Colors.FgGr+"Public web execution page is running at http://"+ getIp() +Colors.FgGr+":"+Colors.FgYe+ port +Colors.R);
- });
+});

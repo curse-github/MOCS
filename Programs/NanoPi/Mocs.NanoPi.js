@@ -67,7 +67,7 @@ var Client = /** @class */ (function () {
                             }
                             else {
                                 console.log("Error, command sent to child device?...");
-                                return;
+                                return _this;
                             }
                         }
                         else if (msg.type == "reply") {
@@ -94,71 +94,83 @@ var Client = /** @class */ (function () {
             };
             this.ws.onclose = function (e) {
                 console.log("Lost connection to MOCS server.");
-                _this.tryReconnect();
                 _this.ws = null;
-                if (onclose != null)
+                if (_this.onclose != null)
                     _this.onclose();
+                _this.setReconnectInterval(true);
             };
         }
         catch (err) {
             console.log(err.stack);
         }
+        return this;
     };
-    Client.prototype.tryReconnect = function () {
+    Client.prototype.setReconnectInterval = function (reconnection) {
         var _this = this;
         // attempt to connect every 20 seconds untill it works and then stop.
+        this.tryReconnect(reconnection);
         this.intervalId = setInterval(function () {
-            if (_this.ws == null) {
-                _this.attemts++;
-                console.log("Attempt #" + _this.attemts + " to connect to the MOCS server.");
-                _this.ws = new WebSocket(Client.URL);
-                _this.ws.onerror = function (e) { if (_this.ws != null) {
-                    try {
-                        _this.ws.close();
-                    }
-                    catch (err) {
-                        console.log(err.stack);
-                    }
-                    _this.ws = null;
-                    if (onclose != null)
-                        _this.onclose();
-                } };
-                _this.ws.onopen = function () {
-                    _this.stopInterval(); // stop loop.
-                    _this.attemts = 0;
-                    _this.SetupWebsocket();
-                };
+            _this.tryReconnect(reconnection);
+        }, 15000);
+        return this;
+    };
+    Client.prototype.tryReconnect = function (reconnection) {
+        var _this = this;
+        if (this.ws != null) {
+            try {
+                this.ws.close();
             }
-        }, 20000);
+            catch (err) {
+                console.log(err.stack);
+            }
+            this.ws = null;
+        }
+        ;
+        this.attemts++;
+        console.log("Attempt #" + this.attemts + " to connect to the MOCS server.");
+        this.ws = new this.WebSocket(Client.URL);
+        this.ws.onerror = function (e) { if (_this.ws != null) {
+            if (_this.onclose != null)
+                _this.onclose();
+            try {
+                _this.ws.close();
+            }
+            catch (err) {
+                console.log(err.stack);
+            }
+            _this.ws = null;
+        } };
+        this.ws.onclose = function (e) { if (_this.ws != null) {
+            if (_this.onclose != null)
+                _this.onclose();
+            _this.ws = null;
+        } };
+        this.ws.onopen = function () {
+            _this.stopInterval(); // stop loop.
+            console.clear();
+            console.log((reconnection == true ? "Rec" : "C") + "onnected to MOCS server" + ((_this.attemts > 1) ? " after " + _this.attemts + " attempts." : "."));
+            _this.attemts = 0;
+            _this.SetupWebsocket();
+        };
         return this;
     };
     Client.prototype.stopInterval = function () { if (this.intervalId != null) {
         clearInterval(this.intervalId);
         this.intervalId = null;
-    } };
+    } return this; };
     Client.prototype.AddFunction = function (name, isPublic, parameters, func) {
         this.connectionMessage.data.functions.push({ "name": name, "public": isPublic, "parameters": parameters });
         this.functions[name.toLowerCase() + "()"] = func;
+        return this;
     };
     Client.prototype.listen = function () {
-        var _this = this;
-        this.ws = new this.WebSocket(Client.URL);
-        this.ws.onerror = function (e) {
-            console.log("Unable to connect to MOCS server.");
-            _this.tryReconnect();
-            _this.ws = null;
-            if (onclose != null)
-                _this.onclose();
-        };
-        this.ws.onopen = function () {
-            _this.SetupWebsocket();
-        };
+        this.setReconnectInterval();
         return this;
     };
     Client.URL = "ws://mc.campbellsimpson.com:42069";
     return Client;
 }());
-//#endregion
+//#endregion typeDefs
 var spawn = require("child_process").spawn;
 var lines = ["", "", "", "", "", "", "", ""];
 var subscriptions = [];
@@ -214,15 +226,15 @@ function wasPressed(button, websocket) {
         }
     }
 }
-var myClient = new Client("NanoPi", true);
-myClient.AddFunction("Line", true, [
+var myClient = new Client("NanoPi", true)
+    .AddFunction("Line", true, [
     newParameter("lineNum", false, true, 1),
     newParameter("text", false, true, "string")
 ], function (client, lineNum, text) {
     line(lineNum, text);
-});
-myClient.AddFunction("Clear", true, [], function (client) { clear(); });
-myClient.AddFunction("Restore", true, [
+})
+    .AddFunction("Clear", true, [], function (client) { clear(); })
+    .AddFunction("Restore", true, [
     newParameter("line1", true, true, "-_-_-_-_-_-_-_-_"),
     newParameter("line2", true, true, "-_-_-_-_-_-_-_-_"),
     newParameter("line3", true, true, "-_-_-_-_-_-_-_-_"),
@@ -231,20 +243,21 @@ myClient.AddFunction("Restore", true, [
     newParameter("line6", true, true, "-_-_-_-_-_-_-_-_")
 ], function (client, line1, line2, line3, line4, line5, line6) {
     restore([line1, line2, line3, line4, line5, line6]);
-});
-myClient.AddFunction("Subscribe", false, [
+})
+    .AddFunction("Subscribe", false, [
     newParameter("button", false, true, 1),
     newParameter("name", false, true, "name"),
     newParameter("func", false, true, "func"),
     newParameter("parameter", false, true, "parameter")
 ], function (client, button, name, func, parameter) {
     subscribe(button, name, func, parameter);
-});
-myClient.AddFunction("wasPressed", true, [
+})
+    .AddFunction("wasPressed", true, [
     newParameter("button", false, true, 1)
 ], function (client, button) {
     wasPressed(button, client.ws);
-});
+})
+    .listen();
 //#region Spotify
 var intervalId2 = null;
 var http = require("http");
@@ -341,5 +354,4 @@ myClient.onclose = function () { if (intervalId2 != null) {
     intervalId2 = null;
 } };
 //#endregion Spotify
-myClient.listen();
 setupSpotify();
