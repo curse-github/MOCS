@@ -15,7 +15,6 @@ function newParameter(name, nullable, public, defaultValue) {
 var Client = /** @class */ (function () {
     function Client(name, isPublic) {
         this.WebSocket = require('ws');
-        //http = require("http");
         this.connectionMessage = {
             type: "connection",
             data: {
@@ -167,7 +166,8 @@ var Client = /** @class */ (function () {
         this.setReconnectInterval();
         return this;
     };
-    Client.URL = "ws://mc.campbellsimpson.com:42069";
+    //static URL:string = "ws://mc.campbellsimpson.com:42069";
+    Client.URL = "ws://192.168.1.37:42069";
     return Client;
 }());
 //#endregion typeDefs

@@ -28,8 +28,8 @@ interface connMsg {
 }
 class Client {
     WebSocket = require('ws');
-    static URL:string = "ws://mc.campbellsimpson.com:42069";
-    //http = require("http");
+    //static URL:string = "ws://mc.campbellsimpson.com:42069";
+    static URL:string = "ws://192.168.1.37:42069";
     connectionMessage:connMsg = {
         type:"connection",
         data:{
