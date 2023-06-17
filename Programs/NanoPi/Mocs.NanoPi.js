@@ -7,9 +7,9 @@ var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
     }
     return to.concat(ar || Array.prototype.slice.call(from));
 };
-function newParameter(name, nullable, public, defaultValue) {
+function newParameter(name, nullable, public, defaultValue, type) {
     return {
-        "name": name, "type": ((typeof defaultValue).replace("bigint", "number")), "nullable": nullable, "public": public, "defaultValue": defaultValue
+        "name": name, "type": (type || (typeof defaultValue).replace("bigint", "number")), "nullable": nullable, "public": public, "defaultValue": defaultValue
     };
 }
 var Client = /** @class */ (function () {
@@ -50,23 +50,25 @@ var Client = /** @class */ (function () {
             this.ws.onmessage = function (e) {
                 var _a;
                 try {
+                    if (_this.ws == null)
+                        return;
                     var msg = JSON.parse(e.data);
                     if (msg.type != null) {
                         if (msg.type == "ping" && msg.data != null) {
                             _this.ws.send(JSON.stringify({ type: "pong", data: msg.data }));
                         }
                         else if (msg.type == "command" && msg.data != null) {
-                            if (!msg.data.includes(".")) {
-                                if (msg.parameters != null && msg.parameters.length > 0) {
-                                    (_a = _this.functions)[msg.data.toLowerCase()].apply(_a, __spreadArray([_this], msg.parameters, false));
-                                }
-                                else {
-                                    _this.functions[msg.data.toLowerCase()](_this);
-                                }
+                            var funcName = msg.data.toLowerCase();
+                            if (_this.functions[funcName] == null) {
+                                console.log("invalid command");
+                                console.log(msg);
+                                return;
+                            }
+                            if (msg.parameters != null && msg.parameters.length > 0) {
+                                (_a = _this.functions)[funcName].apply(_a, __spreadArray([_this], msg.parameters, false));
                             }
                             else {
-                                console.log("Error, command sent to child device?...");
-                                return _this;
+                                _this.functions[funcName](_this);
                             }
                         }
                         else if (msg.type == "reply") {
@@ -95,7 +97,10 @@ var Client = /** @class */ (function () {
                 console.log("Lost connection to MOCS server.");
                 _this.ws = null;
                 if (_this.onclose != null)
-                    _this.onclose();
+                    try {
+                        _this.onclose();
+                    }
+                    catch (err) { }
                 _this.setReconnectInterval(true);
             };
         }
@@ -130,7 +135,10 @@ var Client = /** @class */ (function () {
         this.ws = new this.WebSocket(Client.URL);
         this.ws.onerror = function (e) { if (_this.ws != null) {
             if (_this.onclose != null)
-                _this.onclose();
+                try {
+                    _this.onclose();
+                }
+                catch (err) { }
             try {
                 _this.ws.close();
             }
@@ -141,7 +149,10 @@ var Client = /** @class */ (function () {
         } };
         this.ws.onclose = function (e) { if (_this.ws != null) {
             if (_this.onclose != null)
-                _this.onclose();
+                try {
+                    _this.onclose();
+                }
+                catch (err) { }
             _this.ws = null;
         } };
         this.ws.onopen = function () {
@@ -160,6 +171,20 @@ var Client = /** @class */ (function () {
     Client.prototype.AddFunction = function (name, isPublic, parameters, func) {
         this.connectionMessage.data.functions.push({ "name": name, "public": isPublic, "parameters": parameters });
         this.functions[name.toLowerCase() + "()"] = func;
+        return this;
+    };
+    Client.prototype.AddChildFunction = function (devicename, devicePublic, functionName, functionPublic, parameters, func) {
+        var devices = this.connectionMessage.data.devices;
+        if (devices == null)
+            devices = [];
+        var index = devices.findIndex(function (el) { return el.name == devicename; });
+        if (index == -1) {
+            index = devices.length;
+            devices.push({ name: devicename, "public": devicePublic, functions: [] });
+        }
+        devices[index].functions.push({ "name": functionName, "public": functionPublic, "parameters": parameters });
+        this.connectionMessage.data.devices = devices;
+        this.functions[devicename.toLowerCase() + "." + functionName.toLowerCase() + "()"] = func;
         return this;
     };
     Client.prototype.listen = function () {
@@ -266,7 +291,8 @@ function setupSpotify() {
     intervalId2 = setInterval(function () {
         try {
             var options = {
-                host: 'mc.campbellsimpson.com',
+                //host: 'mc.campbellsimpson.com',
+                host: '192.168.1.37',
                 port: 8081,
                 path: '/SpotifyStatus'
             };
@@ -284,7 +310,8 @@ function setupSpotify() {
                                 if (data[1][1].toLowerCase().includes("taylor") && data[1][1].toLowerCase().includes("swift")) {
                                     try {
                                         http.request({
-                                            host: 'mc.campbellsimpson.com',
+                                            //host: 'mc.campbellsimpson.com',
+                                            host: '192.168.1.37',
                                             port: 8081,
                                             path: '/SpotifySkipNext'
                                         }, function (response) {
@@ -354,4 +381,7 @@ myClient.onclose = function () { if (intervalId2 != null) {
     intervalId2 = null;
 } };
 //#endregion Spotify
-setupSpotify();
+try {
+    setupSpotify();
+}
+catch (err) { }

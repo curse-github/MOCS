@@ -6,10 +6,10 @@ interface parameter {
     type:"string"|"number"|"boolean";
     nullable:boolean;
     public:boolean;
-    defaultValue?:string|number|boolean;
+    defaultValue?:string|number|boolean|null;
 }
-function newParameter<T extends string|number|boolean>(name:string,nullable:boolean,public:boolean,defaultValue:T):parameter { return {
-    "name":name,"type":(((typeof defaultValue).replace("bigint","number")) as ("string"|"number"|"boolean")),"nullable":nullable,"public":public,"defaultValue":defaultValue
+function newParameter<T extends string|number|boolean>(name:string,nullable:boolean,public:boolean,defaultValue:T|null,type?:"string"|"number"|"boolean"):parameter { return {
+    "name":name,"type":((type||(typeof defaultValue).replace("bigint","number")) as ("string"|"number"|"boolean")),"nullable":nullable,"public":public,"defaultValue":defaultValue
 };}
 interface func {
     name:string;
@@ -28,8 +28,8 @@ interface connMsg {
 }
 class Client {
     WebSocket = require('ws');
-    static URL:string = "ws://mc.campbellsimpson.com:42069";
-    //http = require("http");
+    //static URL:string = "ws://mc.campbellsimpson.com:42069";
+    static URL:string = "ws://192.168.1.37:42069";
     connectionMessage:connMsg = {
         type:"connection",
         data:{
@@ -54,15 +54,16 @@ class Client {
             this.ws!.onerror   = (err:any)=>{ console.log("Websocket error: \""+err+"\"."); };
             this.ws!.onmessage = (e  :any)=>{
                 try {
+                    if (this.ws == null) return;
                     var msg = JSON.parse(e.data);
                     if (msg.type != null) {
                         if (msg.type == "ping" && msg.data != null) {
                             this.ws!.send(JSON.stringify({type:"pong",data:msg.data}));
                         } else if (msg.type == "command" && msg.data != null) {
-                            if (!msg.data.includes(".")) {
-                                if(msg.parameters!=null&&msg.parameters.length>0){ this.functions[msg.data.toLowerCase()](this,...msg.parameters); }
-                                else{ this.functions[msg.data.toLowerCase()](this); }
-                            } else { console.log("Error, command sent to child device?..."); return this; }
+                            const funcName:string = msg.data.toLowerCase();
+                            if (this.functions[funcName] == null) {console.log("invalid command"); console.log(msg); return;}
+                            if(msg.parameters!=null&&msg.parameters.length>0){ this.functions[funcName](this,...msg.parameters); }
+                            else{ this.functions[funcName](this); }
                         } else if (msg.type == "reply") {
                             if (msg.statusCode != 200) {
                                 console.log("Connection failed, status "+msg.status     );
@@ -82,7 +83,7 @@ class Client {
             this.ws!.onclose = (e:any)=>{
                 console.log("Lost connection to MOCS server.");
                 this.ws = null;
-                if(this.onclose!=null) this.onclose!();
+                if(this.onclose!=null) try{this.onclose!();}catch(err:any){}
                 this.setReconnectInterval(true);
             };
         } catch (err) {
@@ -104,8 +105,8 @@ class Client {
         this.attemts++;
         console.log("Attempt #"+this.attemts+" to connect to the MOCS server.");
         this.ws=new this.WebSocket(Client.URL);
-        this.ws!.onerror=(e:any)=>{if(this.ws!=null){if(this.onclose!=null) this.onclose!(); try{ this.ws!.close(); }catch(err:any){ console.log(err.stack); } this.ws=null; }};
-        this.ws!.onclose=(e:any)=>{if(this.ws!=null){if(this.onclose!=null) this.onclose!(); this.ws=null; }};
+        this.ws!.onerror=(e:any)=>{if(this.ws!=null){if(this.onclose!=null) try{this.onclose!();}catch(err:any){} try{ this.ws!.close(); }catch(err:any){ console.log(err.stack); } this.ws=null; }};
+        this.ws!.onclose=(e:any)=>{if(this.ws!=null){if(this.onclose!=null) try{this.onclose!();}catch(err:any){} this.ws=null; }};
         this.ws!.onopen=()=>{
             this.stopInterval();// stop loop.
             console.clear();
@@ -120,6 +121,16 @@ class Client {
     AddFunction(name:string,isPublic:boolean,parameters:parameter[],func:mocsFunction):Client {
         this.connectionMessage.data.functions.push({"name":name,"public":isPublic,"parameters":parameters});
         this.functions[name.toLowerCase()+"()"] = func;
+        return this;
+    }
+    AddChildFunction(devicename:string,devicePublic:boolean,functionName:string,functionPublic:boolean,parameters:parameter[],func:mocsFunction):Client {
+        var devices:device[]|undefined = this.connectionMessage.data.devices;
+        if (devices == null) devices = [];
+        var index:number = devices!.findIndex((el:device)=>{return el.name==devicename;})
+        if (index == -1) { index = devices.length; devices!.push({name:devicename,"public":devicePublic,functions:[]}); }
+        devices[index].functions.push({"name":functionName,"public":functionPublic,"parameters":parameters});
+        this.connectionMessage.data.devices = devices;
+        this.functions[devicename.toLowerCase()+"."+functionName.toLowerCase()+"()"] = func;
         return this;
     }
     listen():Client {
