@@ -4,7 +4,7 @@ var connected = false;
 var connecting = false;
 //const url = "mc.campbellsimpson.com";
 const url = "192.168.1.37";
-const tabSize = 20;
+const tabSize = 40;
 function append(parent,type,content,attributes) {
 	var thing;
 	if (type != null) { thing = document.createElement(type); } else { document.createElement("div"); }
@@ -56,7 +56,7 @@ function setup() {
 						data = msg.data;
 						Object.keys(data).forEach((i) => {
 							if (data[i] != null && (data[i].public == true)) {
-								processDevice(page,data[i], i, 0, false);
+								processDevice(page,data[i], i, true, false);
 							}
 						});
 
@@ -89,7 +89,7 @@ function setup() {
 					cmd = msg.data;
 					if (cmd.toLowerCase() == "connect()") {
 						if (msg.parameters[1] != null && (msg.parameters[1].public == true)) {
-							processDevice(document.body, msg.parameters[1], msg.parameters[0].toLowerCase(), 1, true);
+							processDevice(document.querySelector("p#page"), msg.parameters[1], msg.parameters[0].toLowerCase(), 0, true);
 							setTimeout(() => {
 								document.getElementById(msg.parameters[1].name.toLowerCase() + "-P").setAttribute("deleted",false);
 							}, 25);
@@ -146,9 +146,13 @@ function setup() {
 }
 setup();
 
-function processDevice(parent,device,deviceName, tabs, startDeleted) {
+function processDevice(parent,device,deviceName, indent, startDeleted) {
 	if ((device.functions != null && Object.keys(device.functions).length > 0) || (device.devices != null && Object.keys(device.devices).length > 0)) {
-		var p = append(parent,"p", device.name + "   ", {id:device.name.toLowerCase() + "-P", deleted:(startDeleted == false || startDeleted == null) ? false : true, style:"margin-left: " + tabSize + "px;padding-top:0;margin-bottom:0;margin-top:0;"});
+		var p = append(parent,"p", device.name + "   ", {
+			id:device.name.toLowerCase() + "-P",
+			deleted:(startDeleted == false || startDeleted == null) ? false : true,
+			style:(indent?("margin-left: " + tabSize + "px;"):"")+"padding-top:0;margin-bottom:0;margin-top:0;"
+		});
 		append(p, "button", "^", {
 			class:"btn btn-collapser border rounded-0 text-white",
 			onclick:"document.getElementById(\"" + device.name.toLowerCase() + "\").setAttribute(\"collapsed\",!(document.getElementById(\"" + device.name.toLowerCase() + "\").getAttribute(\"collapsed\") === \"true\")); this.innerText = (document.getElementById(\"" + device.name.toLowerCase() + "\").getAttribute(\"collapsed\") === \"true\") ? \"v\" : \"^\";"
@@ -170,18 +174,19 @@ function processDevice(parent,device,deviceName, tabs, startDeleted) {
 					if (i.parameters[0].type == "string") {onclick += '\\\"';}
 					onclick += '" + ';
 					for (var l = 0; l < i.parameters.length; l++) {
-						if (i.parameters[l].public == false || i.parameters[l].public == "false") {
-							if (i.parameters[l].nullable) {
+						const parameter = i.parameters[l];
+						if (parameter.public == false || parameter.public == "false") {
+							if (parameter.nullable) {
 								onclick += '"null"';
 							} else {
 								onclick += '""';
 							}
-						} else if (i.parameters[l].name.split(".")[0] == "url") {
-							onclick += 'parseUrl(window.location.search).' + i.parameters[l].name.split(".")[1];
+						} else if (parameter.name.split(".")[0] == "url") {
+							onclick += 'parseUrl(window.location.search).' + parameter.name.split(".")[1];
 						} else {
-							onclick += 'document.getElementById("' + deviceName + "." + i.name + "." + i.parameters[l].name + '").value';
+							onclick += 'document.getElementById("' + deviceName + "." + i.name + "." + parameter.name + '").value';
 						}
-						onclick += (l != (i.parameters.length - 1) ? ' + "' + (i.parameters[l].type == "string" ? "\\\"" : "") + "," + (i.parameters[l + 1] != null && i.parameters[l + 1].type == "string" ? "\\\"" : "") + '" + ' : ' + "' + (i.parameters[l].type == "string" ? "\\\"" : ""));
+						onclick += (l != (i.parameters.length - 1) ? ' + "' + (parameter.type == "string" ? "\\\"" : "") + "," + (i.parameters[l + 1] != null && i.parameters[l + 1].type == "string" ? "\\\"" : "") + '" + ' : ' + "' + (i.parameters[l].type == "string" ? "\\\"" : ""));
 					}
 				}
 				onclick += ']}}")';
@@ -194,29 +199,14 @@ function processDevice(parent,device,deviceName, tabs, startDeleted) {
 				});
 				if (i.parameters != null && i.parameters.length > 0) {
 					for (var l = 0; l < i.parameters.length; l++) {
-						if (i.parameters[l].public == true || i.parameters[l].public == true || i.parameters[l].public == null || i.parameters[l].public == "null") {
+						const parameter = i.parameters[l];
+						if (parameter.public == true || parameter.public == true || parameter.public == null || parameter.public == "null") {
 							let input = append(deviceP,"input","",{
-								id: deviceName + "." + i.name + "." + i.parameters[l].name,
+								id: deviceName + "." + i.name + "." + parameter.name,
 								class:"form-control form-control-input text-white w-auto border rounded-0 d-inline align-middle",
 							});
-							if (i.parameters[l].defaultValue != null) {
-								input.setAttribute("value",i.parameters[l].defaultValue);
-							} else {
-								switch (i.parameters[l].type) {
-									case "string":
-										input.setAttribute("value","string");
-										break;
-									case "bool":
-										input.setAttribute("value","true");
-										break;
-									case "number":
-										input.setAttribute("value","1");
-										break;
-									default:
-										input.setAttribute("value","unknown");
-										break;
-								}
-							}
+							const defaultValue = parameter.defaultValue;
+							input.setAttribute("value",(defaultValue!=null?defaultValue:"null"));
 						}
 					}
 				}
@@ -224,7 +214,7 @@ function processDevice(parent,device,deviceName, tabs, startDeleted) {
 		});
 		if (device.devices != null) {
 			Object.entries(device.devices).forEach((j) => {
-				if (j != null && j[1] != null && (j[1].public == true || j[1].public == null)) { processDevice(collapseDiv, j[1], deviceName + "." + j[1].name, tabs + 1, false); }
+				if (j != null && j[1] != null && (j[1].public == true || j[1].public == null)) { processDevice(collapseDiv, j[1], deviceName + "." + j[1].name, false, false); }
 			});
 		}
 	}

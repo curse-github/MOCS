@@ -539,7 +539,7 @@ function findFunction(list:{[key:string]:Device|null},data:cmdData,websocket:any
                 if (out != false) {
                     const message:{[key:string]:string} = out as {[key:string]:string};
                     assertIsObject(message);
-                    message.data = shift + "." + message.data;
+                    message.data = deviceNameSplit.join(".").toLowerCase() + "." + message.data;
                     if (type==2) return [message]; else return [shift, JSON.stringify(message)];
                 } else {
                     return [false];
