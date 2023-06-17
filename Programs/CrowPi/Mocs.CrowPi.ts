@@ -6,10 +6,10 @@ interface parameter {
     type:"string"|"number"|"boolean";
     nullable:boolean;
     public:boolean;
-    defaultValue?:string|number|boolean;
+    defaultValue?:string|number|boolean|null;
 }
-function newParameter<T extends string|number|boolean>(name:string,nullable:boolean,public:boolean,defaultValue:T):parameter { return {
-    "name":name,"type":(((typeof defaultValue).replace("bigint","number")) as ("string"|"number"|"boolean")),"nullable":nullable,"public":public,"defaultValue":defaultValue
+function newParameter<T extends string|number|boolean>(name:string,nullable:boolean,public:boolean,defaultValue:T|null,type?:"string"|"number"|"boolean"):parameter { return {
+    "name":name,"type":((type||(typeof defaultValue).replace("bigint","number")) as ("string"|"number"|"boolean")),"nullable":nullable,"public":public,"defaultValue":defaultValue
 };}
 interface func {
     name:string;
@@ -54,15 +54,16 @@ class Client {
             this.ws!.onerror   = (err:any)=>{ console.log("Websocket error: \""+err+"\"."); };
             this.ws!.onmessage = (e  :any)=>{
                 try {
+                    if (this.ws == null) return;
                     var msg = JSON.parse(e.data);
                     if (msg.type != null) {
                         if (msg.type == "ping" && msg.data != null) {
                             this.ws!.send(JSON.stringify({type:"pong",data:msg.data}));
                         } else if (msg.type == "command" && msg.data != null) {
-                            if (!msg.data.includes(".")) {
-                                if(msg.parameters!=null&&msg.parameters.length>0){ this.functions[msg.data.toLowerCase()](this,...msg.parameters); }
-                                else{ this.functions[msg.data.toLowerCase()](this); }
-                            } else { console.log("Error, command sent to child device?..."); return this; }
+                            const funcName:string = msg.data.toLowerCase();
+                            if (this.functions[funcName] == null) {console.log("invalid command"); console.log(msg); return;}
+                            if(msg.parameters!=null&&msg.parameters.length>0){ this.functions[funcName](this,...msg.parameters); }
+                            else{ this.functions[funcName](this); }
                         } else if (msg.type == "reply") {
                             if (msg.statusCode != 200) {
                                 console.log("Connection failed, status "+msg.status     );
@@ -82,7 +83,7 @@ class Client {
             this.ws!.onclose = (e:any)=>{
                 console.log("Lost connection to MOCS server.");
                 this.ws = null;
-                if(this.onclose!=null) this.onclose!();
+                if(this.onclose!=null) try{this.onclose!();}catch(err:any){}
                 this.setReconnectInterval(true);
             };
         } catch (err) {
@@ -104,8 +105,8 @@ class Client {
         this.attemts++;
         console.log("Attempt #"+this.attemts+" to connect to the MOCS server.");
         this.ws=new this.WebSocket(Client.URL);
-        this.ws!.onerror=(e:any)=>{if(this.ws!=null){if(this.onclose!=null) this.onclose!(); try{ this.ws!.close(); }catch(err:any){ console.log(err.stack); } this.ws=null; }};
-        this.ws!.onclose=(e:any)=>{if(this.ws!=null){if(this.onclose!=null) this.onclose!(); this.ws=null; }};
+        this.ws!.onerror=(e:any)=>{if(this.ws!=null){if(this.onclose!=null) try{this.onclose!();}catch(err:any){} try{ this.ws!.close(); }catch(err:any){ console.log(err.stack); } this.ws=null; }};
+        this.ws!.onclose=(e:any)=>{if(this.ws!=null){if(this.onclose!=null) try{this.onclose!();}catch(err:any){} this.ws=null; }};
         this.ws!.onopen=()=>{
             this.stopInterval();// stop loop.
             console.clear();
@@ -122,6 +123,16 @@ class Client {
         this.functions[name.toLowerCase()+"()"] = func;
         return this;
     }
+    AddChildFunction(devicename:string,devicePublic:boolean,functionName:string,functionPublic:boolean,parameters:parameter[],func:mocsFunction):Client {
+        var devices:device[]|undefined = this.connectionMessage.data.devices;
+        if (devices == null) devices = [];
+        var index:number = devices!.findIndex((el:device)=>{return el.name==devicename;})
+        if (index == -1) { index = devices.length; devices!.push({name:devicename,"public":devicePublic,functions:[]}); }
+        devices[index].functions.push({"name":functionName,"public":functionPublic,"parameters":parameters});
+        this.connectionMessage.data.devices = devices;
+        this.functions[devicename.toLowerCase()+"."+functionName.toLowerCase()+"()"] = func;
+        return this;
+    }
     listen():Client {
         this.setReconnectInterval();
         return this;
@@ -131,8 +142,6 @@ class Client {
 //#endregion typeDefs
 
 const spawn = require("child_process").spawn;
-var lines:string[] = ["","","","","","","",""];
-var subscriptions:any[] = [];
 function pythonCmd(file,args) {
     var lst:string[] = [...args]
     lst.unshift(file)
@@ -140,50 +149,75 @@ function pythonCmd(file,args) {
 }
 
 const myClient:Client = new Client("CrowPi",true)
-.AddFunction("minecraftTeleport" ,true,[
-    newParameter<number>("x",false,true,0),
-    newParameter<number>("y",false,true,0),
-    newParameter<number>("z",false,true,0)
-],(client:Client,x:mocsParameter,y:mocsParameter,z:mocsParameter)=>{
-    pythonCmd(__dirname+"/minecraftTeleport.py",[x,y,z]);
-})
-.AddFunction("minecraftPlaceBlock" ,true,[
-    newParameter<number>("x",false,true,0),
-    newParameter<number>("y",false,true,0),
-    newParameter<number>("z",false,true,0),
-    newParameter<number>("blockid",false,true,0),
-    newParameter<number>("subtype",true ,true,0)
-],(client:Client,x:mocsParameter,y:mocsParameter,z:mocsParameter,blockid:mocsParameter,subtype:mocsParameter)=>{
-    if (subtype != null) pythonCmd(__dirname+"/minecraftPlaceBlock.py",[x,y,z,blockid,subtype]);
-    else                 pythonCmd(__dirname+"/minecraftPlaceBlock.py",[x,y,z,blockid]);
-})
-.AddFunction("minecraftChat" ,true,[
-    newParameter<string>("input",false,true,"string")
-],(client:Client,input:mocsParameter)=>{
-    pythonCmd(__dirname+"/minecraftChat.py",[input]);
-})
-.AddFunction("segmentTime"   ,true,[
+.AddFunction("segmentTime"  , true,[
     newParameter<string>("num",false,true,"1200")
 ],(client:Client,num:mocsParameter)=>{
     pythonCmd(__dirname+"/segmentTime.py",[Math.floor(num as number)]);
 })
-.AddFunction("segmentNumber" ,true,[
+.AddFunction("segmentNumber", true,[
     newParameter<number>("num",false,true,98.76)
 ],(client:Client,num:mocsParameter)=>{
-    pythonCmd(__dirname+"/segmentNumber.py",[num]);
+    pythonCmd(__dirname+"/segmentNumber.py",[num as number]);
 })
-.AddFunction("matrixPrint" ,true,[
+.AddFunction("segmentClear" , true,[],(client:Client)=>{ pythonCmd(__dirname+"/segmentClear.py",[]); })
+.AddFunction("matrixPrint"  , true,[
     newParameter<string>("input",false,true,"string")
 ],(client:Client,input:mocsParameter)=>{
-    pythonCmd(__dirname+"/matrixPrint.py",[input]);
+    pythonCmd(__dirname+"/matrixPrint.py",[input as string]);
 })
-.AddFunction("lcdPrint" ,true,[
+.AddFunction("lcdPrint"     , true,[
     newParameter<string>("input",false,true,"string")
 ],(client:Client,input:mocsParameter)=>{
-    pythonCmd(__dirname+"/lcdPrint.py",[input]);
+    pythonCmd(__dirname+"/lcdPrint.py"   ,[input as string]);
 })
-.AddFunction("lcdClear" ,true,[],(client:Client)=>{ pythonCmd(__dirname+"/lcdClear.py",[]); })
-.AddFunction("buzz"     ,true,[
+.AddFunction("lcdClear"     , true,[],(client:Client)=>{ pythonCmd(__dirname+"/lcdClear.py"    ,[]); })
+.AddFunction("buzz"         , true,[
     newParameter<number>("time",false ,true,0.5)
-],(client:Client,time:mocsParameter)=>{ pythonCmd(__dirname+"/buzzer.py",[time]); })
+],(client:Client,time:mocsParameter)=>{ pythonCmd(__dirname+"/buzzer.py",[time as number]); })
+.AddChildFunction("minecraft",true,"PlayerTeleport"  , true,[
+    newParameter<number>("x",false,true,0),
+    newParameter<number>("y",false,true,0),
+    newParameter<number>("z",false,true,0)
+],(client:Client,x:mocsParameter,y:mocsParameter,z:mocsParameter)=>{
+    pythonCmd(__dirname+"/minecraft/minecraftPlayerTeleport.py",[x as number,y as number,z as number]);
+})
+.AddChildFunction("minecraft",true,"PlaceBlock"      , true,[
+    newParameter<number>("x"      ,false,true,0            ),
+    newParameter<number>("y"      ,false,true,0            ),
+    newParameter<number>("z"      ,false,true,0            ),
+    newParameter<number>("blockid",false,true,0            ),
+    newParameter<number>("subtype",true ,true,null,"number")
+],(client:Client,x:mocsParameter,y:mocsParameter,z:mocsParameter,blockid:mocsParameter,subtype:mocsParameter)=>{
+    if (subtype != null) pythonCmd(__dirname+"/minecraft/minecraftPlaceBlock.py",[x as number,y as number,z as number,blockid as number,subtype as number]);
+    else                 pythonCmd(__dirname+"/minecraft/minecraftPlaceBlock.py",[x as number,y as number,z as number,blockid as number]);
+})
+.AddChildFunction("minecraft",true,"PlaceAtPlayer"   , true,[
+    newParameter<number>("blockid",false,true,0            ),
+    newParameter<number>("subtype",true ,true,null,"number")
+],(client:Client,blockid:mocsParameter,subtype:mocsParameter)=>{
+    if (subtype != null) pythonCmd(__dirname+"/minecraft/minecraftPlaceAtPlayer.py",[blockid as number,subtype as number]);
+    else                 pythonCmd(__dirname+"/minecraft/minecraftPlaceAtPlayer.py",[blockid as number]);
+})
+.AddChildFunction("minecraft",true,"PlayerMove"      , true,[
+    newParameter<number>("x",false,true,0),
+    newParameter<number>("y",false,true,0),
+    newParameter<number>("z",false,true,0)
+],(client:Client,x:mocsParameter,y:mocsParameter,z:mocsParameter)=>{
+    pythonCmd(__dirname+"/minecraft/minecraftPlayerMove.py",[x as number,y as number,z as number]);
+})
+.AddChildFunction("minecraft",true,"PlaceRelToPlayer", true,[
+    newParameter<number>("x"      ,false,true,0            ),
+    newParameter<number>("y"      ,false,true,0            ),
+    newParameter<number>("z"      ,false,true,0            ),
+    newParameter<number>("blockid",false,true,0            ),
+    newParameter<number>("subtype",true ,true,null,"number")
+],(client:Client,x:mocsParameter,y:mocsParameter,z:mocsParameter,blockid:mocsParameter,subtype:mocsParameter)=>{
+    if (subtype != null) pythonCmd(__dirname+"/minecraft/minecraftPlaceRelToPlayer.py",[x as number,y as number,z as number,blockid as number,subtype as number]);
+    else                 pythonCmd(__dirname+"/minecraft/minecraftPlaceRelToPlayer.py",[x as number,y as number,z as number,blockid as number]);
+})
+.AddChildFunction("minecraft",true,"Chat"            , true,[
+    newParameter<string>("input",false,true,"string")
+],(client:Client,input:mocsParameter)=>{
+    pythonCmd(__dirname+"/minecraft/minecraftChat.py",[input as string]);
+})
 .listen();

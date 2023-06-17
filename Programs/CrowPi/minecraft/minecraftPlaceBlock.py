@@ -8,22 +8,19 @@ def run():
         return
     pos = (sys.argv[1],sys.argv[2],sys.argv[3])
     blockid = sys.argv[4]
-    if ((not pos[0].isdigit()) and (not (pos[0].startswith("-") and pos[0][1:].isdigit()))):
-        return
-    if ((not pos[1].isdigit()) and (not (pos[1].startswith("-") and pos[1][1:].isdigit()))):
-        return
-    if ((not pos[2].isdigit()) and (not (pos[2].startswith("-") and pos[2][1:].isdigit()))):
-        return
     if (not blockid.isdigit()):
         return
-    pos = (int(pos[0]),int(pos[1]),int(pos[2]))
     blockid = int(blockid)
+    try:
+        pos = (float(pos[0]),float(pos[1]),float(pos[2]))
+    except ValueError:
+        return
     if (len(sys.argv) >= 6):
         subtype = sys.argv[5]
         if (not subtype.isdigit()):
             return
         mc = Minecraft.create()
-        mc.setBlock(pos[0],pos[1],pos[2], blockid, subtype)
+        mc.setBlock(pos[0],pos[1],pos[2], blockid, int(subtype))
     else:
         mc = Minecraft.create()
         mc.setBlock(pos[0],pos[1],pos[2], blockid)
