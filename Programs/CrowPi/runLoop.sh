@@ -1,0 +1,1 @@
+sudo /usr/bin/screen -dmS matrixLoop /usr/bin/python /home/pi/Desktop/Mocs/matrixLoop.py

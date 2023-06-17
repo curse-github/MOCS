@@ -11,9 +11,7 @@ segment.clear()
 def run():
   if (len(sys.argv) < 2):
     return
-  if (len(sys.argv[1])<4):
-    return
-  string = sys.argv[1]
+  string = sys.argv[1].rjust(4,"0")
   lst = [sys.argv[1][0:][:1],sys.argv[1][1:][:1],sys.argv[1][2:][:1],sys.argv[1][3:][:1]]
   print(lst)
   if (not string[0].isdigit()):

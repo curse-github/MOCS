@@ -14,7 +14,7 @@ def Broadcast(msg):
     device = max7219(serial, cascaded=1, block_orientation=90, rotate=0)
     # print hello world on the matrix display
     try:
-        show_message(device, msg, fill="white", font=proportional(LCD_FONT), scroll_delay=0.15)
+        show_message(device, msg, fill="white", font=proportional(LCD_FONT), scroll_delay=0.2)
     except KeyboardInterrupt:
         return
 if (len(sys.argv) >= 2):

@@ -160,11 +160,20 @@ const myClient:Client = new Client("CrowPi",true)
     pythonCmd(__dirname+"/segmentNumber.py",[num as number]);
 })
 .AddFunction("segmentClear" , true,[],(client:Client)=>{ pythonCmd(__dirname+"/segmentClear.py",[]); })
-.AddFunction("matrixPrint"  , true,[
+.AddFunction("matrixPixel"  , true,[
+    newParameter<number>("x"     ,false,true,0   ),
+    newParameter<number>("y"     ,false,true,0   ),
+    newParameter<number>("size"  ,false,true,1   ),
+    newParameter<boolean>("value",false,true,true)
+],(client:Client,x:mocsParameter,y:mocsParameter,size:mocsParameter,value:mocsParameter)=>{
+    pythonCmd(__dirname+"/matrixPixel.py",[x as number,y as number,size as number,value as boolean]);
+})
+.AddFunction("matrixClear"  , true,[],(client:Client)=>{ pythonCmd(__dirname+"/matrixPixel.py",[0,0,8,false]); })
+/*.AddFunction("matrixPrint"  , true,[
     newParameter<string>("input",false,true,"string")
 ],(client:Client,input:mocsParameter)=>{
     pythonCmd(__dirname+"/matrixPrint.py",[input as string]);
-})
+})*/
 .AddFunction("lcdPrint"     , true,[
     newParameter<string>("input",false,true,"string")
 ],(client:Client,input:mocsParameter)=>{

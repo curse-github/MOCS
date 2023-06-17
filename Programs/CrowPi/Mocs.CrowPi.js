@@ -197,14 +197,46 @@ var Client = /** @class */ (function () {
 }());
 //#endregion typeDefs
 var spawn = require("child_process").spawn;
-var lines = ["", "", "", "", "", "", "", ""];
-var subscriptions = [];
 function pythonCmd(file, args) {
     var lst = __spreadArray([], args, true);
     lst.unshift(file);
     spawn("python", lst);
 }
 var myClient = new Client("CrowPi", true)
+    .AddFunction("segmentTime", true, [
+    newParameter("num", false, true, "1200")
+], function (client, num) {
+    pythonCmd(__dirname + "/segmentTime.py", [Math.floor(num)]);
+})
+    .AddFunction("segmentNumber", true, [
+    newParameter("num", false, true, 98.76)
+], function (client, num) {
+    pythonCmd(__dirname + "/segmentNumber.py", [num]);
+})
+    .AddFunction("segmentClear", true, [], function (client) { pythonCmd(__dirname + "/segmentClear.py", []); })
+    .AddFunction("matrixPixel", true, [
+    newParameter("x", false, true, 0),
+    newParameter("y", false, true, 0),
+    newParameter("size", false, true, 1),
+    newParameter("value", false, true, true)
+], function (client, x, y, size, value) {
+    pythonCmd(__dirname + "/matrixPixel.py", [x, y, size, value]);
+})
+    .AddFunction("matrixClear", true, [], function (client) { pythonCmd(__dirname + "/matrixPixel.py", [0, 0, 8, false]); })
+    /*.AddFunction("matrixPrint"  , true,[
+        newParameter<string>("input",false,true,"string")
+    ],(client:Client,input:mocsParameter)=>{
+        pythonCmd(__dirname+"/matrixPrint.py",[input as string]);
+    })*/
+    .AddFunction("lcdPrint", true, [
+    newParameter("input", false, true, "string")
+], function (client, input) {
+    pythonCmd(__dirname + "/lcdPrint.py", [input]);
+})
+    .AddFunction("lcdClear", true, [], function (client) { pythonCmd(__dirname + "/lcdClear.py", []); })
+    .AddFunction("buzz", true, [
+    newParameter("time", false, true, 0.5)
+], function (client, time) { pythonCmd(__dirname + "/buzzer.py", [time]); })
     .AddChildFunction("minecraft", true, "PlayerTeleport", true, [
     newParameter("x", false, true, 0),
     newParameter("y", false, true, 0),
@@ -257,31 +289,4 @@ var myClient = new Client("CrowPi", true)
 ], function (client, input) {
     pythonCmd(__dirname + "/minecraft/minecraftChat.py", [input]);
 })
-    .AddFunction("segmentTime", true, [
-    newParameter("num", false, true, "1200")
-], function (client, num) {
-    pythonCmd(__dirname + "/segmentTime.py", [Math.floor(num)]);
-})
-    .AddFunction("segmentNumber", true, [
-    newParameter("num", false, true, 98.76)
-], function (client, num) {
-    pythonCmd(__dirname + "/segmentNumber.py", [num]);
-})
-    .AddFunction("segmentClear", true, [], function (client) {
-    pythonCmd(__dirname + "/segmentClear.py", []);
-})
-    .AddFunction("matrixPrint", true, [
-    newParameter("input", false, true, "string")
-], function (client, input) {
-    pythonCmd(__dirname + "/matrixPrint.py", [input]);
-})
-    .AddFunction("lcdPrint", true, [
-    newParameter("input", false, true, "string")
-], function (client, input) {
-    pythonCmd(__dirname + "/lcdPrint.py", [input]);
-})
-    .AddFunction("lcdClear", true, [], function (client) { pythonCmd(__dirname + "/lcdClear.py", []); })
-    .AddFunction("buzz", true, [
-    newParameter("time", false, true, 0.5)
-], function (client, time) { pythonCmd(__dirname + "/buzzer.py", [time]); })
     .listen();
