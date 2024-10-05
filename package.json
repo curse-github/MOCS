@@ -1,15 +1,20 @@
 {
-  "name": "mocs2",
-  "version": "2.0",
-  "description": "modular online control system v2",
+  "name": "mocs-2",
+  "version": "1.1.0",
   "main": "Server.js",
   "scripts": {
-    "start": "ts-node Server.ts"
+    "start": "node ./Server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/curse-github/MOCS.git"
   },
   "author": "Curse",
   "license": "ISC",
   "dependencies": {
-    "typescript": "^4.9.3",
-    "nodejs": "^14.15.3"
+    "express": "^4.21.0",
+    "nodejs": "^0.0.0",
+    "typescript": "^5.6.2",
+    "ws": "^8.18.0"
   }
 }

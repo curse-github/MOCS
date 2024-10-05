@@ -1,19 +1,15 @@
-var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
-    if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
-        if (ar || !(i in from)) {
-            if (!ar) ar = Array.prototype.slice.call(from, 0, i);
-            ar[i] = from[i];
-        }
-    }
-    return to.concat(ar || Array.prototype.slice.call(from));
-};
+"use strict";
 function newParameter(name, nullable, public, defaultValue, type) {
     return {
         "name": name, "type": (type || (typeof defaultValue).replace("bigint", "number")), "nullable": nullable, "public": public, "defaultValue": defaultValue
     };
 }
-var Client = /** @class */ (function () {
-    function Client(name, isPublic) {
+class Client {
+    get name() { return this.connectionMessage.data.name; }
+    set name(v) { this.connectionMessage.data.name = v; }
+    get public() { return this.connectionMessage.data.public; }
+    set public(v) { this.connectionMessage.data.public = v; }
+    constructor(name, isPublic) {
         this.WebSocket = require('ws');
         this.connectionMessage = {
             type: "connection",
@@ -30,45 +26,31 @@ var Client = /** @class */ (function () {
         this.name = name;
         this.public = isPublic;
     }
-    Object.defineProperty(Client.prototype, "name", {
-        get: function () { return this.connectionMessage.data.name; },
-        set: function (v) { this.connectionMessage.data.name = v; },
-        enumerable: false,
-        configurable: true
-    });
-    Object.defineProperty(Client.prototype, "public", {
-        get: function () { return this.connectionMessage.data.public; },
-        set: function (v) { this.connectionMessage.data.public = v; },
-        enumerable: false,
-        configurable: true
-    });
-    Client.prototype.SetupWebsocket = function () {
-        var _this = this;
+    SetupWebsocket() {
         try {
             this.ws.send(JSON.stringify(this.connectionMessage));
-            this.ws.onerror = function (err) { console.log("Websocket error: \"" + err + "\"."); };
-            this.ws.onmessage = function (e) {
-                var _a;
+            this.ws.onerror = (err) => { console.log("Websocket error: \"" + err + "\"."); };
+            this.ws.onmessage = (e) => {
                 try {
-                    if (_this.ws == null)
+                    if (this.ws == null)
                         return;
                     var msg = JSON.parse(e.data);
                     if (msg.type != null) {
                         if (msg.type == "ping" && msg.data != null) {
-                            _this.ws.send(JSON.stringify({ type: "pong", data: msg.data }));
+                            this.ws.send(JSON.stringify({ type: "pong", data: msg.data }));
                         }
                         else if (msg.type == "command" && msg.data != null) {
-                            var funcName = msg.data.toLowerCase();
-                            if (_this.functions[funcName] == null) {
+                            const funcName = msg.data.toLowerCase();
+                            if (this.functions[funcName] == null) {
                                 console.log("invalid command");
                                 console.log(msg);
                                 return;
                             }
                             if (msg.parameters != null && msg.parameters.length > 0) {
-                                (_a = _this.functions)[funcName].apply(_a, __spreadArray([_this], msg.parameters, false));
+                                this.functions[funcName](this, ...msg.parameters);
                             }
                             else {
-                                _this.functions[funcName](_this);
+                                this.functions[funcName](this);
                             }
                         }
                         else if (msg.type == "reply") {
@@ -93,33 +75,31 @@ var Client = /** @class */ (function () {
                     console.log(err);
                 }
             };
-            this.ws.onclose = function (e) {
+            this.ws.onclose = (e) => {
                 console.log("Lost connection to MOCS server.");
-                _this.ws = null;
-                if (_this.onclose != null)
+                this.ws = null;
+                if (this.onclose != null)
                     try {
-                        _this.onclose();
+                        this.onclose();
                     }
                     catch (err) { }
-                _this.setReconnectInterval(true);
+                this.setReconnectInterval(true);
             };
         }
         catch (err) {
             console.log(err.stack);
         }
         return this;
-    };
-    Client.prototype.setReconnectInterval = function (reconnection) {
-        var _this = this;
+    }
+    setReconnectInterval(reconnection) {
         // attempt to connect every 20 seconds untill it works and then stop.
         this.tryReconnect(reconnection);
-        this.intervalId = setInterval(function () {
-            _this.tryReconnect(reconnection);
+        this.intervalId = setInterval(() => {
+            this.tryReconnect(reconnection);
         }, 15000);
         return this;
-    };
-    Client.prototype.tryReconnect = function (reconnection) {
-        var _this = this;
+    }
+    tryReconnect(reconnection) {
         if (this.ws != null) {
             try {
                 this.ws.close();
@@ -133,51 +113,51 @@ var Client = /** @class */ (function () {
         this.attemts++;
         console.log("Attempt #" + this.attemts + " to connect to the MOCS server.");
         this.ws = new this.WebSocket(Client.URL);
-        this.ws.onerror = function (e) { if (_this.ws != null) {
-            if (_this.onclose != null)
+        this.ws.onerror = (e) => { if (this.ws != null) {
+            if (this.onclose != null)
                 try {
-                    _this.onclose();
+                    this.onclose();
                 }
                 catch (err) { }
             try {
-                _this.ws.close();
+                this.ws.close();
             }
             catch (err) {
                 console.log(err.stack);
             }
-            _this.ws = null;
+            this.ws = null;
         } };
-        this.ws.onclose = function (e) { if (_this.ws != null) {
-            if (_this.onclose != null)
+        this.ws.onclose = (e) => { if (this.ws != null) {
+            if (this.onclose != null)
                 try {
-                    _this.onclose();
+                    this.onclose();
                 }
                 catch (err) { }
-            _this.ws = null;
+            this.ws = null;
         } };
-        this.ws.onopen = function () {
-            _this.stopInterval(); // stop loop.
+        this.ws.onopen = () => {
+            this.stopInterval(); // stop loop.
             console.clear();
-            console.log((reconnection == true ? "Rec" : "C") + "onnected to MOCS server" + ((_this.attemts > 1) ? " after " + _this.attemts + " attempts." : "."));
-            _this.attemts = 0;
-            _this.SetupWebsocket();
+            console.log((reconnection == true ? "Rec" : "C") + "onnected to MOCS server" + ((this.attemts > 1) ? " after " + this.attemts + " attempts." : "."));
+            this.attemts = 0;
+            this.SetupWebsocket();
         };
         return this;
-    };
-    Client.prototype.stopInterval = function () { if (this.intervalId != null) {
+    }
+    stopInterval() { if (this.intervalId != null) {
         clearInterval(this.intervalId);
         this.intervalId = null;
-    } return this; };
-    Client.prototype.AddFunction = function (name, isPublic, parameters, func) {
+    } return this; }
+    AddFunction(name, isPublic, parameters, func) {
         this.connectionMessage.data.functions.push({ "name": name, "public": isPublic, "parameters": parameters });
         this.functions[name.toLowerCase() + "()"] = func;
         return this;
-    };
-    Client.prototype.AddChildFunction = function (devicename, devicePublic, functionName, functionPublic, parameters, func) {
+    }
+    AddChildFunction(devicename, devicePublic, functionName, functionPublic, parameters, func) {
         var devices = this.connectionMessage.data.devices;
         if (devices == null)
             devices = [];
-        var index = devices.findIndex(function (el) { return el.name == devicename; });
+        var index = devices.findIndex((el) => { return el.name == devicename; });
         if (index == -1) {
             index = devices.length;
             devices.push({ name: devicename, "public": devicePublic, functions: [] });
@@ -186,21 +166,20 @@ var Client = /** @class */ (function () {
         this.connectionMessage.data.devices = devices;
         this.functions[devicename.toLowerCase() + "." + functionName.toLowerCase() + "()"] = func;
         return this;
-    };
-    Client.prototype.listen = function () {
+    }
+    listen() {
         this.setReconnectInterval();
         return this;
-    };
-    //static URL:string = "ws://mc.campbellsimpson.com:42069";
-    Client.URL = "ws://192.168.1.37:42069";
-    return Client;
-}());
+    }
+}
+//static URL:string = "ws://mc.campbellsimpson.com:42069";
+Client.URL = "ws://192.168.1.37:42069";
 //#endregion typeDefs
-var spawn = require("child_process").spawn;
+const spawn = require("child_process").spawn;
 var lines = ["", "", "", "", "", "", "", ""];
 var subscriptions = [];
 function line(lineNum, text) {
-    var _lineNum = Math.min(Math.max(lineNum, 0), 5);
+    const _lineNum = Math.min(Math.max(lineNum, 0), 5);
     lines[_lineNum + 2] = ((text == null || text == "" || text == "null") ? " " : text);
     restore([lines[2], lines[3], lines[4], lines[5], lines[6], lines[7]]);
 }
@@ -251,14 +230,14 @@ function wasPressed(button, websocket) {
         }
     }
 }
-var myClient = new Client("NanoPi", true)
+const myClient = new Client("NanoPi", true)
     .AddFunction("Line", true, [
     newParameter("lineNum", false, true, 1),
     newParameter("text", false, true, "string")
-], function (client, lineNum, text) {
+], (client, lineNum, text) => {
     line(lineNum, text);
 })
-    .AddFunction("Clear", true, [], function (client) { clear(); })
+    .AddFunction("Clear", true, [], (client) => { clear(); })
     .AddFunction("Restore", true, [
     newParameter("line1", true, true, "-_-_-_-_-_-_-_-_"),
     newParameter("line2", true, true, "-_-_-_-_-_-_-_-_"),
@@ -266,7 +245,7 @@ var myClient = new Client("NanoPi", true)
     newParameter("line4", true, true, "-_-_-_-_-_-_-_-_"),
     newParameter("line5", true, true, "-_-_-_-_-_-_-_-_"),
     newParameter("line6", true, true, "-_-_-_-_-_-_-_-_")
-], function (client, line1, line2, line3, line4, line5, line6) {
+], (client, line1, line2, line3, line4, line5, line6) => {
     restore([line1, line2, line3, line4, line5, line6]);
 })
     .AddFunction("Subscribe", false, [
@@ -274,21 +253,21 @@ var myClient = new Client("NanoPi", true)
     newParameter("name", false, true, "name"),
     newParameter("func", false, true, "func"),
     newParameter("parameter", false, true, "parameter")
-], function (client, button, name, func, parameter) {
+], (client, button, name, func, parameter) => {
     subscribe(button, name, func, parameter);
 })
     .AddFunction("wasPressed", true, [
     newParameter("button", false, true, 1)
-], function (client, button) {
+], (client, button) => {
     wasPressed(button, client.ws);
 })
     .listen();
 //#region Spotify
 var intervalId2 = null;
-var http = require("http");
+const http = require("http");
 var spotify = "";
 function setupSpotify() {
-    intervalId2 = setInterval(function () {
+    intervalId2 = setInterval(() => {
         try {
             var options = {
                 //host: 'mc.campbellsimpson.com',
@@ -296,7 +275,7 @@ function setupSpotify() {
                 port: 8081,
                 path: '/SpotifyStatus'
             };
-            http.request(options, function (response) {
+            http.request(options, (response) => {
                 var str = '';
                 response.on('data', function (chunk) {
                     str += chunk;
@@ -329,17 +308,17 @@ function setupSpotify() {
                                     var title = data[1][0];
                                     if (title.length <= 15) {
                                         lines[0] = title;
-                                        setTimeout(function () {
+                                        setTimeout(() => {
                                             lines[1] = " ";
                                         }, 200);
                                     }
                                     else {
                                         lines[0] = title.substring(0, 13) + " -";
-                                        setTimeout(function () {
+                                        setTimeout(() => {
                                             lines[1] = title.substring(13, 13 + 15);
                                         }, 200);
                                     }
-                                    setTimeout(function () {
+                                    setTimeout(() => {
                                         restore([lines[2], lines[3], lines[4], lines[5], lines[6]]);
                                     }, 250);
                                 }
@@ -376,7 +355,7 @@ function setupSpotify() {
         }
     }, 5000);
 }
-myClient.onclose = function () { if (intervalId2 != null) {
+myClient.onclose = () => { if (intervalId2 != null) {
     clearInterval(intervalId2);
     intervalId2 = null;
 } };

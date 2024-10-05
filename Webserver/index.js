@@ -2,8 +2,8 @@
 var login = "";
 var connected = false;
 var connecting = false;
-//const url = "mc.campbellsimpson.com";
-const url = "192.168.1.37";
+const url = "mc.campbellsimpson.com";
+//const url = "192.168.1.37";
 const tabSize = 40;
 function append(parent,type,content,attributes) {
 	var thing;

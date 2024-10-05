@@ -2,4 +2,4 @@
 /.vscode
 /Spotify
 yarn-error.log
-tsconfig.json
+logins.json
