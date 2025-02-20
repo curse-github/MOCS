@@ -1,0 +1,2 @@
+@echo off
+echo  -- installing all dependencies && powershell "npm install -s" && echo  -- linting files && powershell "npx eslint ." && echo  -- compiling typescript && powershell "tsc" && powershell "./scripts/cleanDeps.bat" && echo  -- installing only needed dependencies && powershell "npm install --omit=dev -s"
