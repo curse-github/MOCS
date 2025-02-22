@@ -102,6 +102,6 @@
   },
   "include": [
     "./*.tsx",
-    "./Client/*.tsx"
+    "./Client/js/*.tsx"
   ]
 }

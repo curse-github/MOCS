@@ -90,8 +90,8 @@ export default tseslint.config(
             "@stylistic/js/wrap-regex": [ "error" ]
         },
         files: [
-            "./*.tsx",
-            "./Client/*.tsx"
+            "**/*.ts",
+            "**/*.tsx",
         ]
     }
 );
