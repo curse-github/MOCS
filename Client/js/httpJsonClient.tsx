@@ -1,12 +1,6 @@
 import { parameterType, functionType, valueType, deviceType, ClientBase } from "./ClientBase.jsx";
 import fetch from "node-fetch";
 
-async function httpReq(hostname: string, method: "GET"|"POST", body: string|undefined): Promise<string> {
-    return (await fetch(hostname, {
-        method,
-        body
-    })).text();
-}
 async function httpReqJson(hostname: string, method: "GET"|"POST", body: string|undefined): Promise<string> {
     return (await fetch(hostname, {
         method,
@@ -17,14 +11,11 @@ async function httpReqJson(hostname: string, method: "GET"|"POST", body: string|
         body
     })).text();
 }
-async function post(hostname: string, body: string) {
-    return httpReq(hostname, "POST", body);
-}
 async function postJson(hostname: string, body: any) {
     return httpReqJson(hostname, "POST", JSON.stringify(body));
 }
 
-class HttpClient extends ClientBase {
+class HttpJsonClient extends ClientBase {
     constructor(_name: string) {
         super(_name);
     }
@@ -37,18 +28,28 @@ class HttpClient extends ClientBase {
         clearInterval(this.interval);
         this.onClose();
     }
-    protected sendCmd(cmd: string) {
-        postJson("http://localhost:80/call", { cmd });
+    protected async sendCmd(cmd: string): Promise<any> {
+        try {
+            // send a command to the server and receive the response
+            const raw: string = (await postJson("http://localhost:80/call", { cmd }));
+            const value: any = JSON.parse(raw).value;
+            if (value == "None") return undefined;
+            else return JSON.parse(value);
+        } catch (error) {
+            return undefined;
+        }
     }
     private connectionId: string = "";
     protected connect() {
-        postJson("http://localhost:80/connect", this.self).then((function(this: HttpClient, raw: string) {
+        // send device object to server
+        postJson("http://localhost:80/connect", this.self).then((function(this: HttpJsonClient, raw: string) {
             try {
                 const data: { status: boolean, id: string } = JSON.parse(raw);
                 if (!data.status) {
                     this.onClose();
                     return;
                 }
+                // save the connection id for other http requests
                 this.connectionId = data.id;
                 this.onConnect();
             } catch (err: any) {
@@ -61,17 +62,15 @@ class HttpClient extends ClientBase {
         this.connectCallback = callback;
     }
     protected afterConnect() {
-        this.interval = setInterval((function(this: HttpClient) {
+        // set interval to do keep alive with the server every second
+        this.interval = setInterval((function(this: HttpJsonClient) {
             postJson("http://localhost:80/keepAlive", {
                 id: this.connectionId
-            }).then((function(this: HttpClient, raw: string) {
+            }).then((function(this: HttpJsonClient, raw: string) {
                 try {
                     const data: { status: boolean, commands: any[] } = JSON.parse(raw);
                     if (!data.status) return;
-                    for (let i = 0; i < data.commands.length; i++) {
-                        const command: any = data.commands[i];
-                        this.onCall(command.func, command.parameters);
-                    }
+                    this.onCall(data.commands, "");
                 } catch (err: any) {
                     this.close();
                 }
@@ -79,24 +78,25 @@ class HttpClient extends ClientBase {
         }).bind(this), 1000) as unknown as number;
         if (this.connectCallback) this.connectCallback();
     }
+    protected returnValue(returnId: string, returnVals: any[]) {
+        postJson("http://localhost:80/return", {
+            id: this.connectionId,
+            values: returnVals
+        }).then((function(this: HttpJsonClient, raw: string) {
+            try {
+                const data: { status: boolean, commands: any[] } = JSON.parse(raw);
+                if (!data.status) return;
+            } catch (err: any) {
+                this.close();
+            }
+        }).bind(this));
+    }
 }
 
-const client: HttpClient = new HttpClient("HttpJsonDevice");
-client.addFunction("func1", [], () => {
+const name: string = "HttpJsonDevice";
+const client: HttpJsonClient = new HttpJsonClient(name);
+client.addFunction("func1", [], "None", () => {
     console.log("func1()");
 });
-client.addFunction("func2", [], () => {
-    console.log("func2()");
-});
-client.addFunction("func3", [ "String", "Number", "Bool", "Color" ], (str: string, number: number, bool: boolean, color: string) => {
-    console.log("func3(" + JSON.stringify(str) + ", " + JSON.stringify(number) + ", " + JSON.stringify(bool) + ", " + JSON.stringify(color) + ")");
-});
 client.start();
-client.setOnConnect(() => {
-    client.call("HttpJsonDevice.func1()");
-    client.call("HttpJsonDevice.func2()");
-    client.call("HttpJsonDevice.func3( \"test\", 1, true, \"#AAAAAA\" )");
-    client.call("HttpJsonDevice.func3( 'test2', 2.34, false, '#000AAA' )");
-    client.call("HttpJsonDevice.func3('test3', \"3\", \"false\", \"#000000\" )");
-    client.call("HttpJsonDevice.func3(\"test4\", '4.56', 'true', \"#00FF0A\" )");
-});
+client.setOnConnect(async () => {});

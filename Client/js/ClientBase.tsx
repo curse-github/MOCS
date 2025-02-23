@@ -6,7 +6,8 @@ export type functionType = {
     name: string,
     overloads: {
         visible: boolean,
-        parameters: parameterType[]
+        parameters: parameterType[],
+        returnType: "String"|"Number"|"Bool"|"Color"|"None"
     }[]
 };
 export type valueType = {
@@ -44,9 +45,11 @@ export class ClientBase {
     protected onClose() {
         this.connected = false;
         this.status = "Closed";
+        console.log("Disconnected from MOCS server");
         if (this.started)
             setTimeout((function(this: ClientBase) {
                 if (this.status == "Open") return;
+                console.log("Attempting to reconnect...");
                 this.open();
             }).bind(this), 5000);// try again after one second
     }
@@ -59,8 +62,10 @@ export class ClientBase {
         }
         this.callQueue = [];
     }
-    protected onCall(func: string, parameters: any[]) {
-        this.funcNameToCallback[func](...parameters);
+    protected onCall(commands: { func: string, parameters: any[] }[], returnId: string) {
+        // get return value of each call and 
+        const returnVals: any[] = commands.map(({ func, parameters }: { func: string, parameters: any[] }) => this.funcNameToCallback[func](...parameters));
+        this.returnValue(returnId, returnVals);
     }
     private started: boolean = false;
     public start() {
@@ -75,14 +80,14 @@ export class ClientBase {
         this.close();
     }
     private callQueue: string[] = [];
-    public call(cmd: string) {
+    public call(cmd: string): Promise<any>|undefined {
         if (!this.connected) {
             this.callQueue.push(cmd);
-            return;
+            return undefined;
         }
-        this.sendCmd(cmd);
+        return this.sendCmd(cmd);
     }
-    public addFunction(name: string, params: ("String"|"Number"|"Bool"|"Color")[], callback: (...params: any[])=> void) {
+    public addFunction(name: string, params: ("String"|"Number"|"Bool"|"Color")[], returnType: "String"|"Number"|"Bool"|"Color"|"None", callback: (...params: any[])=> any) {
         if (this.started) return;
         this.self.functions?.push({
             name: name,
@@ -91,7 +96,8 @@ export class ClientBase {
                     visible: true,
                     parameters: params.map((type: "String"|"Number"|"Bool"|"Color") => {
                         return { type, defaultValue: undefined };
-                    })
+                    }),
+                    returnType
                 }
             ]
         });
@@ -104,12 +110,16 @@ export class ClientBase {
     protected close() {
         console.error("Not Implemented Yet.");
     }
-    protected sendCmd(cmd: string) {
+    protected async sendCmd(cmd: string): Promise<any> {
         console.error("Not Implemented Yet.");
+        return undefined;
     }
     protected connect() {
         console.error("Not Implemented Yet.");
     }
     protected afterConnect() {
+    }
+    protected returnValue(returnId: string, returnVals: any[]) {
+        console.error("Not Implemented Yet.");
     }
 }

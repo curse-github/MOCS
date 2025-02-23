@@ -1,12 +1,23 @@
 import { parameterType, functionType, valueType, deviceType, ClientBase } from "./ClientBase.jsx";
 import { WebSocket, RawData } from "ws";// https://www.npmjs.com/package/ws
 
+function generateUUID(): string {
+    var a = new Date().getTime();// Timestamp
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c) {
+        var b = Math.random() * 16;// random number between 0 and 16
+        b = (a + b) % 16 | 0;
+        a = Math.floor(a / 16);
+        return (c === "x" ? b : ((b & 0x3) | 0x8)).toString(16);
+    });
+}
 class WsClient extends ClientBase {
     private ws: WebSocket|undefined;
     constructor(_name: string) {
         super(_name);
     }
+    returnValueResolves: {[returnId: string]: (val: any)=> void} = {};
     protected open() {
+        // initialize websocket and set callbacks
         this.ws = new WebSocket("ws://localhost:8080");
         this.ws.on("error", (function(this: WsClient, err: any) {
             if (err.code != "ECONNREFUSED")
@@ -21,20 +32,34 @@ class WsClient extends ClientBase {
             if (json.type == "ping") {
                 this.ws!.send(JSON.stringify({ type: "pong" })); return;
             } else if (json.type == "call")
-                this.onCall(json.func, json.parameters);
+                this.onCall([ json ], json.returnId);
+            else if (json.type == "return") {
+                this.returnValueResolves[json.returnId](json.value);
+            }
         }).bind(this));
     }
     protected close() {
-        console.log("closing");
         this.ws!.close();
     }
-    protected sendCmd(cmd: string) {
+    protected async sendCmd(cmd: string): Promise<any> {
+        // generate id to receive return value with
+        const id: string = generateUUID();
+        // send command to server
         this.ws!.send(JSON.stringify({
             type: "call",
-            cmd
+            cmd,
+            returnId: id
         }));
+        // wait for response
+        const value: any = (await new Promise<any>((resolve: (val: any)=> void) => {
+            this.returnValueResolves[id] = resolve;
+        }));
+        // parse response and return it
+        if (value == "None") return undefined;
+        else return JSON.parse(value);
     }
     protected connect() {
+        // send device object to server
         this.ws!.send(JSON.stringify({
             type: "connection",
             device: this.self
@@ -48,24 +73,18 @@ class WsClient extends ClientBase {
     protected afterConnect() {
         if (this.connectCallback) this.connectCallback();
     }
+    protected returnValue(returnId: string, [ value ]: any[]) {
+        this.ws!.send(JSON.stringify({
+            type: "return",
+            value,
+            returnId
+        }));
+    }
 }
-
-const client: WsClient = new WsClient("WsDevice");
-client.addFunction("func1", [], () => {
+const name: string = "WsDevice";
+const client: WsClient = new WsClient(name);
+client.addFunction("func1", [], "None", () => {
     console.log("func1()");
 });
-client.addFunction("func2", [], () => {
-    console.log("func2()");
-});
-client.addFunction("func3", [ "String", "Number", "Bool", "Color" ], (str: string, number: number, bool: boolean, color: string) => {
-    console.log("func3(" + JSON.stringify(str) + ", " + JSON.stringify(number) + ", " + JSON.stringify(bool) + ", " + JSON.stringify(color) + ")");
-});
 client.start();
-client.setOnConnect(() => {
-    client.call("WsDevice.func1()");
-    client.call("WsDevice.func2()");
-    client.call("WsDevice.func3( \"test\", 1, true, \"#AAAAAA\" )");
-    client.call("WsDevice.func3( 'test2', 2.34, false, '#000AAA' )");
-    client.call("WsDevice.func3('test3', \"3\", \"false\", \"#000000\" )");
-    client.call("WsDevice.func3(\"test4\", '4.56', 'true', \"#00FF0A\" )");
-});
+client.setOnConnect(async () => {});

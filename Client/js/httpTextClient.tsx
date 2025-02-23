@@ -11,24 +11,11 @@ async function httpReq(hostname: string, method: "GET"|"POST", body: string|unde
         body
     })).text();
 }
-async function httpReqJson(hostname: string, method: "GET"|"POST", body: string|undefined): Promise<string> {
-    return (await fetch(hostname, {
-        method,
-        headers: {
-            Accept: "application/json",
-            "Content-Type": "application/json"
-        },
-        body
-    })).text();
-}
 async function post(hostname: string, body: any) {
     return httpReq(hostname, "POST", JSON.stringify(body));
 }
-async function postJson(hostname: string, body: any) {
-    return httpReqJson(hostname, "POST", JSON.stringify(body));
-}
 
-class HttpClient extends ClientBase {
+class HttpTextClient extends ClientBase {
     constructor(_name: string) {
         super(_name);
     }
@@ -41,23 +28,17 @@ class HttpClient extends ClientBase {
         clearInterval(this.interval);
         this.onClose();
     }
-    protected sendCmd(cmd: string) {
-        postJson("http://localhost:80/call", { cmd });
+    protected async sendCmd(cmd: string): Promise<any> {
+        const val: any = await post("http://localhost:80/call", { cmd });
+        if (val == "None") return undefined;
+        else return JSON.parse(val);
     }
     private connectionId: string = "";
     protected connect() {
-        postJson("http://localhost:80/connect", this.self).then((function(this: HttpClient, raw: string) {
-            try {
-                const data: { status: boolean, id: string } = JSON.parse(raw);
-                if (!data.status) {
-                    this.onClose();
-                    return;
-                }
-                this.connectionId = data.id;
-                this.onConnect();
-            } catch (err: any) {
-                this.close();
-            }
+        post("http://localhost:80/connect", this.self).then((function(this: HttpTextClient, data: string) {
+            if (data == "Invalid") { this.close(); return; }
+            this.connectionId = data;
+            this.onConnect();
         }).bind(this));
     }
     connectCallback: (()=> void)|undefined = undefined;
@@ -65,37 +46,40 @@ class HttpClient extends ClientBase {
         this.connectCallback = callback;
     }
     protected afterConnect() {
-        this.interval = setInterval((function(this: HttpClient) {
+        this.interval = setInterval((function(this: HttpTextClient) {
             post("http://localhost:80/keepAlive", {
                 id: this.connectionId
-            }).then((function(this: HttpClient, data: string) {
+            }).then((function(this: HttpTextClient, data: string) {
                 if (data == "Invalid") this.close();
                 else {
-                    if (data != "")
-                        console.log(data.split("\n"));
+                    if (data == "") return;
+                    data.split("\n").forEach((line: string) => {
+                        const lineSplt: string[] = line.split("(");
+                        const func: string = lineSplt[0];
+                        let parameters: any = lineSplt[1].split(")")[0];
+                        if (parameters.split(",")[0] == "") parameters = [];// has no paramters
+                        else parameters = parameters.split(",").map((str: string) => JSON.parse(str.trim()));
+                        this.onCall([ { func, parameters } ], "");
+                    });
                 }
             }).bind(this));
         }).bind(this), 1000) as unknown as number;
         if (this.connectCallback) this.connectCallback();
     }
+    protected returnValue(returnId: string, returnVals: any[]) {
+        post("http://localhost:80/return", {
+            id: this.connectionId,
+            values: returnVals
+        }).then((function(this: HttpTextClient, data: string) {
+            if (data == "Invalid") this.close();
+        }).bind(this));
+    }
 }
 
-const client: HttpClient = new HttpClient("HttpTextDevice");
-client.addFunction("func1", [], () => {
+const name: string = "HttpTextDevice";
+const client: HttpTextClient = new HttpTextClient(name);
+client.addFunction("func1", [], "None", () => {
     console.log("func1()");
 });
-client.addFunction("func2", [], () => {
-    console.log("func2()");
-});
-client.addFunction("func3", [ "String", "Number", "Bool", "Color" ], (str: string, number: number, bool: boolean, color: string) => {
-    console.log("func3(" + JSON.stringify(str) + ", " + JSON.stringify(number) + ", " + JSON.stringify(bool) + ", " + JSON.stringify(color) + ")");
-});
 client.start();
-client.setOnConnect(() => {
-    client.call("HttpTextDevice.func1()");
-    client.call("HttpTextDevice.func2()");
-    client.call("HttpTextDevice.func3( \"test\", 1, true, \"#AAAAAA\" )");
-    client.call("HttpTextDevice.func3( 'test2', 2.34, false, '#000AAA' )");
-    client.call("HttpTextDevice.func3('test3', \"3\", \"false\", \"#000000\" )");
-    client.call("HttpTextDevice.func3(\"test4\", '4.56', 'true', \"#00FF0A\" )");
-});
+client.setOnConnect(async () => {});
