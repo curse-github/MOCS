@@ -384,7 +384,7 @@ class ConnectionHandler {
     private deviceHttpLastPingTime: {[id: string]: number} = {};
     private httpCmdQueue: {[id: string]: any[]} = {};
     
-    private wsReturnResolves: {[id: string]: [string, (val: any)=> void]} = {};
+    private wsReturnResolves: {[key: string]: [string, (val: any)=> void]} = {};
     private httpReturnResolveLists: {[id: string]: ((val: any)=> void)[]} = {};
     constructor(websocketPort: number, httpPort: number) {
         this.wbsckt = new WebsocketWrapper(websocketPort);
@@ -466,6 +466,7 @@ class ConnectionHandler {
                     res.status(404).send("<html><body>404 Page Not Found</body></html>");
                 console.log("Device connection over HTTP failed.");
                 console.error(reason);
+                console.log(req.body);
                 return;
             }
             if (this.deviceNameToIndex[req.body.name] != undefined) { // device name is taken
@@ -477,6 +478,7 @@ class ConnectionHandler {
                     res.status(404).send("<html><body>404 Page Not Found</body></html>");
                 console.log("Device connection over HTTP failed.");
                 console.error("Device name is taken.");
+                console.log(req.body.name);
                 return;
             }
             console.log("Device \"" + req.body.name + "\" connected.");
@@ -487,10 +489,13 @@ class ConnectionHandler {
             this.deviceHttpConnectionIds.push(connectionId);
             this.deviceHttpLastPingTime[connectionId] = (new Date()).getTime();
             this.httpCmdQueue[connectionId] = [];
+            this.httpReturnResolveLists[connectionId] = [];
             if (req.headers.accept == "application/json")
                 res.status(200).json({ status: true, id: connectionId });
             else if (req.headers.accept == "application/text")
                 res.status(200).send(connectionId);
+            else
+                res.status(404).send("<html><body>404 Page Not Found</body></html>");
         }).bind(this));
         this.exprs.post("/keepAlive", (function(this: ConnectionHandler, req: Request, res: Response) {
             if (this.deviceHttpLastPingTime[req.body.id] == undefined) {
@@ -526,6 +531,7 @@ class ConnectionHandler {
             });
         }).bind(this));
         this.exprs.post("/return", (function(this: ConnectionHandler, req: Request, res: Response) {
+            console.log(req.body);
             if (this.httpReturnResolveLists[req.body.id] == undefined) {
                 if (req.headers.accept == "application/json")// client requested json
                     res.status(200).json({ status: false });
@@ -537,7 +543,7 @@ class ConnectionHandler {
                 const values: any[] = req.body.values;
                 this.deviceHttpLastPingTime[req.body.id] = (new Date()).getTime();
                 if (req.headers.accept == "application/json") { // client requested json
-                    if (this.httpReturnResolveLists[req.body.id].length > values.length) {
+                    if (this.httpReturnResolveLists[req.body.id].length >= values.length) {
                         for (let i = 0; i < values.length; i++)
                             this.httpReturnResolveLists[req.body.id].shift()!(values[i] || "None");
                         res.status(200).json({ status: true });
@@ -545,7 +551,9 @@ class ConnectionHandler {
                 } else if (req.headers.accept == "application/text") { // client requested text
                     const values: any[] = req.body.values;
                     this.deviceHttpLastPingTime[req.body.id] = (new Date()).getTime();
-                    if (this.httpReturnResolveLists[req.body.id].length > values.length) {
+                    console.log(this.httpReturnResolveLists[req.body.id]);
+                    console.log(values);
+                    if (this.httpReturnResolveLists[req.body.id].length >= values.length) {
                         for (let i = 0; i < values.length; i++)
                             this.httpReturnResolveLists[req.body.id].shift()!(values[i] || "None");
                         res.status(200).send("Valid");

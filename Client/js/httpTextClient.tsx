@@ -82,4 +82,5 @@ client.addFunction("func1", [], "None", () => {
     console.log("func1()");
 });
 client.start();
-client.setOnConnect(async () => {});
+client.setOnConnect(async () => {
+});
