@@ -15,7 +15,7 @@ class WsClient extends ClientBase {
     constructor(_name: string) {
         super(_name);
     }
-    returnValueResolves: {[returnId: string]: (val: any)=> void} = {};
+    private returnValueResolves: {[returnId: string]: (val: any)=> void} = {};
     protected open() {
         // initialize websocket and set callbacks
         this.ws = new WebSocket("ws://localhost:8080");
@@ -66,7 +66,7 @@ class WsClient extends ClientBase {
         }));
         this.onConnect();
     }
-    connectCallback: (()=> void)|undefined = undefined;
+    private connectCallback: (()=> void)|undefined = undefined;
     public setOnConnect(callback: ()=> void) {
         this.connectCallback = callback;
     }

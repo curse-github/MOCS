@@ -23,7 +23,7 @@ export type deviceType = {
 
 export class ClientBase {
     private status: "Open"|"Closed" = "Closed";
-    public self: deviceType = {
+    protected self: deviceType = {
         name: "",
         functions: [],
         values: [],

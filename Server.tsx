@@ -266,88 +266,106 @@ type deviceType = {
 // #endregion types
 
 // #region type validation functions
-function verifyparameter(param: parameterType): boolean {
-    if ((typeof param) != "object") return false;
+function unzip<T, U>(zippedArray: [ T, U ][]): [T[], U[]] {
+    let Tarray: T[] = [];
+    let Uarray: U[] = [];
+    for (let i = 0; i < zippedArray.length; i++) {
+        const [ t, u ]: [ T, U ] = zippedArray[i];
+        Tarray.push(t);
+        Uarray.push(u);
+    }
+    return [ Tarray, Uarray ];
+}
+function verifyparameter(param: parameterType): [ boolean, string ] {
+    if ((typeof param) != "object") return [ false, "Parameter specification is not of type object." ];
     if (
         (param.type !== "String") && (param.type !== "Number") && (param.type !== "Bool") && (param.type !== "Color")
-    ) return false;
+    ) return [ false, "" ];
     if (param.defaultValue !== undefined) {
         switch (param.type) {
             case "String":
-                if ((typeof param.defaultValue) !== "string") return false;
+                if ((typeof param.defaultValue) !== "string") return [ false, "Parameter default value to not match paramter type string." ];
                 break;
             case "Number":
                 if ((typeof param.defaultValue) !== "number") {
-                    if (Number(param.defaultValue).toString() != param.defaultValue) return false;
+                    if (Number(param.defaultValue).toString() != param.defaultValue) return [ false, "Parameter default value to not match paramter type number." ];
                 }
                 break;
             case "Bool":
                 if ((typeof param.defaultValue) !== "boolean") {
-                    if ((param.defaultValue !== "true") && (param.defaultValue !== "false")) return false;
+                    if ((param.defaultValue !== "true") && (param.defaultValue !== "false")) return [ false, "Parameter default value to not match paramter type boolean." ];
                 }
                 break;
             case "Color":
-                if ((typeof param.defaultValue) !== "string") return false;
+                if ((typeof param.defaultValue) !== "string") return [ false, "Parameter default value to not match paramter type color." ];
                 else {
                     // validate color
                 }
                 break;
             default:
-                return false;
+                return [ false, "Parameter unknown type." ];
         }
     }
-    return true;
+    return [ true, "" ];
 }
-function verifyOverload(overload: {visible: boolean, parameters: parameterType[], returnType: "String"|"Number"|"Bool"|"Color"|"None"}): boolean {
-    if ((typeof overload) != "object") return false;
-    if ((overload.visible !== true) && (overload.visible !== false)) return false;
-    if (!overload.parameters.map(verifyparameter).every((val: boolean) => val)) return false;
+function verifyOverload(overload: {visible: boolean, parameters: parameterType[], returnType: "String"|"Number"|"Bool"|"Color"|"None"}): [ boolean, string ] {
+    if ((typeof overload) != "object") return [ false, "Overload specification is not of type object." ];
+    if ((overload.visible !== true) && (overload.visible !== false)) return [ false, "Overload visible value is missing or has an invalid type." ];
+    const invalidParameterReasons: string[] = overload.parameters.map(verifyparameter).filter(([ valid ]: [ boolean, string ]) => !valid).map(([ valid, reason ]: [ boolean, string ]) => reason);
+    if (invalidParameterReasons.length > 0) return [ false, invalidParameterReasons.join(", ") ];
     switch (overload.returnType) {
         case "String":
         case "Number":
         case "Bool":
         case "Color":
         case "None":
-            return true;
+            return [ true, "" ];
         default:
-            return false;
+            return [ false, "Overload return type unknown." ];
     }
 }
-function verifyFunction(func: functionType): boolean {
-    if ((typeof func) != "object") return false;
-    if (func.name == "") return false;
-    if (!func.overloads.map(verifyOverload).every((val: boolean) => val)) return false;
-    return true;
+function verifyFunction(func: functionType): [ boolean, string ] {
+    if ((typeof func) != "object") return [ false, "Function specification is not of type object." ];
+    if ((typeof func.name) != "string") return [ false, "Function name value is of invalid type." ];
+    if (func.name == "") return [ false, "Function name cannot be empty." ];
+    const invalidOverloadReasons: string[] = func.overloads.map(verifyOverload).filter(([ valid ]: [ boolean, string ]) => !valid).map(([ valid, reason ]: [ boolean, string ]) => reason);
+    if (invalidOverloadReasons.length > 0) return [ false, invalidOverloadReasons.join(", ") ];
+    return [ true, "" ];
 }
-function verifyValue(value: valueType): boolean {
-    if ((typeof value) != "object") return false;
-    if (value.name == "") return false;
+function verifyValue(value: valueType): [ boolean, string ] {
+    if ((typeof value) != "object") return [ false, "Value specification is not of type object" ];
+    if ((typeof value.name) != "string") return [ false, "Value name value is of invalid type." ];
+    if (value.name == "") return [ false, "Value name cannot be empty." ];
     if (
         (value.type !== "String") && (value.type !== "Number") && (value.type !== "Bool") && (value.type !== "Color")
-    ) return false;
-    return true;
+    ) return [ false, "Value type is unknown." ];
+    return [ true, "" ];
 }
-function verifyDevice(device: deviceType): boolean {
-    if ((typeof device) != "object") return false;
-    if (device.name == "") return false;
+function verifyDevice(device: deviceType): [ boolean, string ] {
+    if ((typeof device) != "object") return [ false, "Device specification is not of type object." ];
+    if ((typeof device.name) != "string") return [ false, "Device name value is of invalid type." ];
+    if (device.name == "") return [ false, "Device name cannot be empty." ];
     let hasUse: boolean = false;
     if (device.functions != undefined) {
-        if (!Array.isArray(device.functions)) return false;
+        if (!Array.isArray(device.functions)) return [ false, "Device specification functions element must be either a list or undefined." ];
         if (device.functions.length != 0) hasUse = true;
-        if (!device.functions.map(verifyFunction).every((val: boolean) => val)) return false;
+        const invalidFunctionReasons: string[] = device.functions.map(verifyFunction).filter(([ valid ]: [ boolean, string ]) => !valid).map(([ valid, reason ]: [ boolean, string ]) => reason);
+        if (invalidFunctionReasons.length > 0) return [ false, invalidFunctionReasons.join(", ") ];
     }
     if (device.values != undefined) {
-        if (!Array.isArray(device.values)) return false;
+        if (!Array.isArray(device.values)) return [ false, "Device specification values element must be either a list or undefined." ];
         if (device.values.length != 0) hasUse = true;
-        if (!device.values.map(verifyValue).every((val: boolean) => val)) return false;
+        const invalidValueReasons: string[] = device.values.map(verifyValue).filter(([ valid ]: [ boolean, string ]) => !valid).map(([ valid, reason ]: [ boolean, string ]) => reason);
+        if (invalidValueReasons.length > 0) return [ false, invalidValueReasons.join(", ") ];
     }
     if (device.children != undefined) {
-        if (!Array.isArray(device.children)) return false;
+        if (!Array.isArray(device.children)) return [ false, "Device specification children element must be either a list or undefined." ];
         if (device.children.length != 0) hasUse = true;
-        if (!device.children.map(verifyDevice).every((val: boolean) => val)) return false;
+        const invalidChildReasons: string[] = device.children.map(verifyDevice).filter(([ valid ]: [ boolean, string ]) => !valid).map(([ valid, reason ]: [ boolean, string ]) => reason);
+        if (invalidChildReasons.length > 0) return [ false, invalidChildReasons.join(", ") ];
     }
-    if (!hasUse) return false;
-    return true;
+    if (!hasUse) return [ false, "Device contains no functions, devices, or children." ];
+    return [ true, "" ];
 }
 // #endregion type validation functions
 
@@ -366,7 +384,7 @@ class ConnectionHandler {
     private deviceHttpLastPingTime: {[id: string]: number} = {};
     private httpCmdQueue: {[id: string]: any[]} = {};
     
-    private wsReturnResolves: {[id: string]: (val: any)=> void} = {};
+    private wsReturnResolves: {[id: string]: [string, (val: any)=> void]} = {};
     private httpReturnResolveLists: {[id: string]: ((val: any)=> void)[]} = {};
     constructor(websocketPort: number, httpPort: number) {
         this.wbsckt = new WebsocketWrapper(websocketPort);
@@ -385,6 +403,12 @@ class ConnectionHandler {
                 delete this.deviceNameToIndex[name];
                 delete this.deviceWsConnectionKey[deviceIndex];
                 delete this.deviceHttpConnectionIds[deviceIndex];
+                Object.entries(this.wsReturnResolves).forEach(([ returnId, [ conKey, resolve ] ]) => {
+                    if (conKey == connectionKey) {
+                        delete this.wsReturnResolves[returnId];
+                        resolve("None");
+                    }
+                });
             }
             console.log("Closed connection with key \"" + connectionKey + "\".");
         }).bind(this));
@@ -393,15 +417,24 @@ class ConnectionHandler {
                 this.websocketWsLastPingTime[connectionKey] = (new Date()).getTime();
                 return;
             } else if (data.type == "connection") {
-                if (!verifyDevice(data.device)) return;
-                if (this.deviceNameToIndex[data.device.name] != undefined) return;// device name is taken
+                let [ verified, reason ] = verifyDevice(data.device);
+                if (!verified) {
+                    console.log("Device connection over WS failed.");
+                    console.error(reason);
+                    return;
+                }
+                if (this.deviceNameToIndex[data.device.name] != undefined) { // device name is taken
+                    console.log("Device connection over WS failed.");
+                    console.error("Device name is taken");
+                    return;
+                }
                 console.log("Device \"" + data.device.name + "\" connected.");
                 this.deviceNameToIndex[data.device.name] = this.devices.length;
                 this.devices.push(data.device);
                 this.deviceWsConnectionKey.push(connectionKey);
                 this.deviceHttpConnectionIds.push(undefined);
             } else if (data.type == "call") {
-                if (data.returnId == undefined) return;
+                if (data.returnId == undefined) { console.error("Call command missing returnId"); return; }
                 this.handleCallCmd(data).then((returnVal: any) => {
                     this.wbsckt.sendJson(connectionKey, {
                         type: "return",
@@ -410,11 +443,11 @@ class ConnectionHandler {
                     });
                 });
             } else if (data.type == "return") {
-                if (data.returnId == undefined) return;
+                if (data.returnId == undefined) { console.error("Return command missing returnId"); return; }
                 const deviceIndex = this.deviceWsConnectionKey.indexOf(connectionKey);
                 if (deviceIndex !== -1) {
                     if (this.wsReturnResolves[data.returnId] != undefined) {
-                        this.wsReturnResolves[data.returnId](data.value || "None");
+                        this.wsReturnResolves[data.returnId][1](data.value || "None");
                         delete this.wsReturnResolves[data.returnId];
                     }
                 }
@@ -423,20 +456,27 @@ class ConnectionHandler {
 
         this.exprs = new ExpressWrapper(httpPort);
         this.exprs.post("/connect", (function(this: ConnectionHandler, req: Request, res: Response) {
-            if (!verifyDevice(req.body)) { // invalid device object
-                if (req.headers.accept == "application/json") { // client requested json
+            let [ verified, reason ] = verifyDevice(req.body);
+            if (!verified) { // invalid device object
+                if (req.headers.accept == "application/json")// client requested json
                     res.status(200).json({ status: false, id: "" });
-                } else if (req.headers.accept == "application/text") { // client requested text
+                else if (req.headers.accept == "application/text")// client requested text
                     res.status(200).send("Invalid");
-                }
+                else
+                    res.status(404).send("<html><body>404 Page Not Found</body></html>");
+                console.log("Device connection over HTTP failed.");
+                console.error(reason);
                 return;
             }
             if (this.deviceNameToIndex[req.body.name] != undefined) { // device name is taken
-                if (req.headers.accept == "application/json") { // client requested json
+                if (req.headers.accept == "application/json")// client requested json
                     res.status(200).json({ status: false, id: "" });
-                } else if (req.headers.accept == "application/text") { // client requested text
+                else if (req.headers.accept == "application/text")// client requested text
                     res.status(200).send("Invalid");
-                }
+                else
+                    res.status(404).send("<html><body>404 Page Not Found</body></html>");
+                console.log("Device connection over HTTP failed.");
+                console.error("Device name is taken.");
                 return;
             }
             console.log("Device \"" + req.body.name + "\" connected.");
@@ -447,73 +487,71 @@ class ConnectionHandler {
             this.deviceHttpConnectionIds.push(connectionId);
             this.deviceHttpLastPingTime[connectionId] = (new Date()).getTime();
             this.httpCmdQueue[connectionId] = [];
-            if (req.headers.accept == "application/json") {
+            if (req.headers.accept == "application/json")
                 res.status(200).json({ status: true, id: connectionId });
-            } else if (req.headers.accept == "application/text") {
+            else if (req.headers.accept == "application/text")
                 res.status(200).send(connectionId);
-            }
         }).bind(this));
         this.exprs.post("/keepAlive", (function(this: ConnectionHandler, req: Request, res: Response) {
-            if (req.headers.accept == "application/json") { // client requested json
-                if (this.deviceHttpLastPingTime[req.body.id] == undefined) {
+            if (this.deviceHttpLastPingTime[req.body.id] == undefined) {
+                if (req.headers.accept == "application/json")// client requested json
                     res.status(200).json({ status: false, commands: [] });
-                } else {
-                    this.deviceHttpLastPingTime[req.body.id] = (new Date()).getTime();
-                    res.status(200).json({ status: true, commands: this.httpCmdQueue[req.body.id] });
-                    this.httpCmdQueue[req.body.id] = [];
-                }
-            } else if (req.headers.accept == "application/text") { // client requested text
-                if (this.deviceHttpLastPingTime[req.body.id] == undefined) {
+                else if (req.headers.accept == "application/text")// client requested text
                     res.status(200).send("Invalid");
-                } else {
-                    this.deviceHttpLastPingTime[req.body.id] = (new Date()).getTime();
+                else
+                    res.status(404).send("<html><body>404 Page Not Found</body></html>");
+            } else {
+                this.deviceHttpLastPingTime[req.body.id] = (new Date()).getTime();
+                if (req.headers.accept == "application/json")// client requested json
+                    res.status(200).json({ status: true, commands: this.httpCmdQueue[req.body.id] });
+                else if (req.headers.accept == "application/text")// client requested text
                     res.status(200).send(this.httpCmdQueue[req.body.id].map((cmd: any) => {
                         let deviceName = cmd.device.join(".");
                         if (deviceName.length != 0) deviceName += ".";
                         return deviceName + cmd.func + "(" + cmd.parameters.map(JSON.stringify).join(",") + ")";
                     }).join("\n"));
-                    this.httpCmdQueue[req.body.id] = [];
-                }
-            } else {
-                res.status(404).send("<html><body>404 Page Not Found</body></html>");
+                else
+                    res.status(404).send("<html><body>404 Page Not Found</body></html>");
+                this.httpCmdQueue[req.body.id] = [];
             }
         }).bind(this));
         this.exprs.post("/call", (function(this: ConnectionHandler, req: Request, res: Response) {
             this.handleCallCmd({ type: "call", cmd: req.body.cmd }).then((returnVal: string) => {
-                if (req.headers.accept == "application/json") { // client requested json
+                if (req.headers.accept == "application/json")// client requested json
                     res.status(200).json({ status: true, value: returnVal });
-                } else if (req.headers.accept == "application/text") { // client requested text
+                else if (req.headers.accept == "application/text")// client requested text
                     res.status(200).send(returnVal);
-                }
+                else
+                    res.status(404).send("<html><body>404 Page Not Found</body></html>");
             });
         }).bind(this));
         this.exprs.post("/return", (function(this: ConnectionHandler, req: Request, res: Response) {
-            if (req.headers.accept == "application/json") { // client requested json
-                if (this.httpReturnResolveLists[req.body.id] == undefined) {
+            if (this.httpReturnResolveLists[req.body.id] == undefined) {
+                if (req.headers.accept == "application/json")// client requested json
                     res.status(200).json({ status: false });
-                } else {
-                    const values: any[] = req.body.values;
-                    this.deviceHttpLastPingTime[req.body.id] = (new Date()).getTime();
-                    if (this.httpReturnResolveLists[req.body.id].length >= values.length) {
+                else if (req.headers.accept == "application/text")// client requested text
+                    res.status(200).send("Invalid");
+                else
+                    res.status(404).send("<html><body>404 Page Not Found</body></html>");
+            } else {
+                const values: any[] = req.body.values;
+                this.deviceHttpLastPingTime[req.body.id] = (new Date()).getTime();
+                if (req.headers.accept == "application/json") { // client requested json
+                    if (this.httpReturnResolveLists[req.body.id].length > values.length) {
                         for (let i = 0; i < values.length; i++)
                             this.httpReturnResolveLists[req.body.id].shift()!(values[i] || "None");
                         res.status(200).json({ status: true });
                     } else res.status(200).json({ status: false });
-                }
-            } else if (req.headers.accept == "application/text") { // client requested text
-                if (this.httpReturnResolveLists[req.body.id] == undefined) {
-                    res.status(200).send("Invalid");
-                } else {
+                } else if (req.headers.accept == "application/text") { // client requested text
                     const values: any[] = req.body.values;
                     this.deviceHttpLastPingTime[req.body.id] = (new Date()).getTime();
-                    if (this.httpReturnResolveLists[req.body.id].length >= values.length) {
+                    if (this.httpReturnResolveLists[req.body.id].length > values.length) {
                         for (let i = 0; i < values.length; i++)
                             this.httpReturnResolveLists[req.body.id].shift()!(values[i] || "None");
                         res.status(200).send("Valid");
                     } else res.status(200).send("Invalid");
-                }
-            } else {
-                res.status(404).send("<html><body>404 Page Not Found</body></html>");
+                } else
+                    res.status(404).send("<html><body>404 Page Not Found</body></html>");
             }
         }).bind(this));
     }
@@ -640,24 +678,24 @@ class ConnectionHandler {
     }
     async handleCallCmd({ type, cmd }: {type: "call", cmd: string }): Promise<any> {
         // cmd must have form "device.function(param)" or "device.function()"
-        if ((typeof cmd) !== "string") return "None";
+        if ((typeof cmd) !== "string") { console.error("Command is not of type string."); return "None"; }
         const splt1: string[] = cmd.split("(");
         // must have something on both sides of a '(', and nothing after the ')'
-        if (splt1.length != 2) return "None";
+        if (splt1.length != 2) { console.error("Command is invalid format."); return "None"; }
         const [ callSigStr, paramsStr1 ]: [string, string] = splt1 as [string, string];
         const paramsSplt: string[] = paramsStr1.split(")");
-        if (paramsSplt.length != 2) return "None";
-        if (paramsSplt[1].length != 0) return "None";
+        if (paramsSplt.length != 2) { console.error("Command is invalid format."); return "None"; }
+        if (paramsSplt[1].length != 0) { console.error("Command is invalid format."); return "None"; }
         const paramsStr2: string = paramsSplt[0];
         // must have at least a single device and function name
         const callSig: string[] = callSigStr.split(".");
-        if (callSig.length < 2) return "None";
-        const index: number = this.deviceNameToIndex[callSig[0]];// the index of the device
-        if (index == undefined) return "None";
+        if (callSig.length < 2) { console.error("Command is invalid format."); return "None"; }
+        const deviceIndex: number = this.deviceNameToIndex[callSig[0]];// the index of the device
+        if (deviceIndex == undefined) { console.error("Command attempted to call function on non-existant device."); return "None"; }
         // get overloads of the function, or undefined if it does not exist
         const funcName: string = callSig.pop()!;
         const overloads: { visible: boolean, parameters: parameterType[], returnType: "String"|"Number"|"Bool"|"Color"|"None" }[]|undefined = this.getFunctionParamsOnDevice(callSig, funcName);
-        if (overloads == undefined) return "None";
+        if (overloads == undefined) { console.error("Command attempted to call non-existant function."); return "None"; }
         // check each overload if it is valid for the given parameters
         const params: string[] = paramsStr2.split(",");
         let finalParams: any[] = [];
@@ -671,8 +709,8 @@ class ConnectionHandler {
                 if (!paramValid) paramsValid = false;
             }
             if (paramsValid) {
-                const key: string|undefined = this.deviceWsConnectionKey[index];
-                const id: string|undefined = this.deviceHttpConnectionIds[index];
+                const key: string|undefined = this.deviceWsConnectionKey[deviceIndex];
+                const id: string|undefined = this.deviceHttpConnectionIds[deviceIndex];
                 let returnVal: any = "None";
                 if (key != undefined) {
                     // send data to websocket connection and await response
@@ -686,7 +724,7 @@ class ConnectionHandler {
                         returnId
                     });
                     returnVal = await new Promise<any>((function(this: ConnectionHandler, resolve: (val: any)=> void) {
-                        this.wsReturnResolves[returnId] = resolve;
+                        this.wsReturnResolves[returnId] = [ key, resolve ];
                     }).bind(this));
                 }
                 if (id != undefined) {
@@ -706,9 +744,10 @@ class ConnectionHandler {
                 // forward response back to sender
                 const [ isValid, validValue ]: [boolean, string] = this.verifyReturnOfType(returnVal, overloads[i].returnType);
                 if (isValid) return JSON.stringify(validValue);
-                else return "None";
+                else { console.error("Function value returned by callee was invalid"); return "None"; }
             }
         }
+        console.error("No function overload found matching the command"); return "None";
     }
     start() {
         Promise.all([ this.wbsckt.start(), this.exprs.start() ]).then(() => {

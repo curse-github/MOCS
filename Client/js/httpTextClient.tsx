@@ -41,7 +41,7 @@ class HttpTextClient extends ClientBase {
             this.onConnect();
         }).bind(this));
     }
-    connectCallback: (()=> void)|undefined = undefined;
+    private connectCallback: (()=> void)|undefined = undefined;
     public setOnConnect(callback: ()=> void) {
         this.connectCallback = callback;
     }
