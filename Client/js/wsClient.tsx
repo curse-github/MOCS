@@ -16,7 +16,7 @@ class WsClient extends ClientBase {
         super(_name);
     }
     private returnValueResolves: {[returnId: string]: (val: any)=> void} = {};
-    protected open() {
+    protected open(): void {
         // initialize websocket and set callbacks
         this.ws = new WebSocket("ws://localhost:8080");
         this.ws.on("error", (function(this: WsClient, err: any) {
@@ -38,7 +38,7 @@ class WsClient extends ClientBase {
             }
         }).bind(this));
     }
-    protected close() {
+    protected close(): void {
         this.ws!.close();
     }
     protected async sendCmd(cmd: string): Promise<any> {
@@ -58,7 +58,7 @@ class WsClient extends ClientBase {
         if (value == "None") return undefined;
         else return JSON.parse(value);
     }
-    protected connect() {
+    protected connect(): void {
         // send device object to server
         this.ws!.send(JSON.stringify({
             type: "connection",
@@ -67,17 +67,24 @@ class WsClient extends ClientBase {
         this.onConnect();
     }
     private connectCallback: (()=> void)|undefined = undefined;
-    public setOnConnect(callback: ()=> void) {
+    public setOnConnect(callback: ()=> void): void {
         this.connectCallback = callback;
     }
-    protected afterConnect() {
+    protected afterConnect(): void {
         if (this.connectCallback) this.connectCallback();
     }
-    protected returnValue(returnId: string, [ value ]: any[]) {
+    protected returnValue(returnId: string, [ value ]: any[]): void {
         this.ws!.send(JSON.stringify({
             type: "return",
             value,
             returnId
+        }));
+    }
+    protected actuallyUpdateValue(name: string, value: any): void {
+        this.ws!.send(JSON.stringify({
+            type: "updateValue",
+            name,
+            value
         }));
     }
 }

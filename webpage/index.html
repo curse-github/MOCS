@@ -1,0 +1,77 @@
+<html>
+    <head>
+        <script>
+            const url = "localhost";
+            const port = "8080";
+            let ws = null;
+            let connected = false;
+            let connecting = false;
+            setInterval(() => {
+                if (ws.readyState != ws.OPEN) connected = false;
+                if (!connected && !connecting) {
+                    //console.log("disconnected");
+                    document.body.innerHTML = "<h2>Server disconnected</h2>";
+                    
+                }
+            }, 5000);// 0.5 seconds
+            function setup() {
+                connecting = true;
+                ws = new WebSocket("ws://" + url + ":" + port);
+                ws.onclose = () => {
+                    console.log("Websocket closed.");
+                    connected = false;
+                    ws = null;
+                    setup();
+                }
+                ws.onerror = () => {
+                    console.log("Websocket error.");
+                    if (ws.readyState == ws.OPEN)
+                        ws.close();
+                }
+                ws.onopen = () => {
+                    connecting = false;
+                    connected = true;
+                    ws.onmessage = (data) => {
+                        console.log(data);
+                    };
+                }
+            }
+            setup();
+        </script>
+        <script>
+            async function httpReqJson(hostname, method, body) {
+                return (await fetch(hostname, {
+                    method,
+                    headers: {
+                        "Accept": "application/json",
+                        "Content-Type": "application/json"
+                    },
+                    body
+                })).text();
+            }
+            async function postJson(hostname, body) {
+                return httpReqJson(hostname, "POST", JSON.stringify(body));
+            }
+            async function getJson(hostname, body) {
+                return httpReqJson(hostname, "GET", undefined);
+            }
+            async function call(cmd) {
+                const tmp = JSON.parse(await postJson("/call", { type: "call", cmd })).value;
+                if (tmp == "None") return undefined;
+                else return JSON.parse(tmp);
+            }
+            getJson("/getDevices").then((data) => {
+                console.log(JSON.parse(data));
+            });
+            call("esp8266.lights.get()").then((val) => {
+                console.log("val1 = " + val);
+                document.getElementById("val1.value").checked = val;
+            })
+        </script>
+    </head>
+    <body>
+        <input type="button" value="Toggle" onclick="call('esp8266.toggle()');">
+        <input type="checkbox" name="val1" id="esp8266.lights.value">
+        <input type="button" value="Set Val1" onclick='call("esp8266.lights.set(\"" + document.getElementById("esp8266.lights.value").value + "\")");'>
+    </body>
+</html>

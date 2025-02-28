@@ -20,10 +20,10 @@ class HttpJsonClient extends ClientBase {
         super(_name);
     }
     private interval: number = 0;
-    protected open() {
+    protected open(): void {
         this.onOpen();
     }
-    protected close() {
+    protected close(): void {
         this.connectionId = "";
         clearInterval(this.interval);
         this.onClose();
@@ -40,7 +40,7 @@ class HttpJsonClient extends ClientBase {
         }
     }
     private connectionId: string = "";
-    protected connect() {
+    protected connect(): void {
         // send device object to server
         postJson("http://localhost:80/connect", this.self).then((function(this: HttpJsonClient, raw: string) {
             try {
@@ -53,15 +53,15 @@ class HttpJsonClient extends ClientBase {
                 this.connectionId = data.id;
                 this.onConnect();
             } catch (err: any) {
-                this.close();
+                this.onError();
             }
         }).bind(this));
     }
     private connectCallback: (()=> void)|undefined = undefined;
-    public setOnConnect(callback: ()=> void) {
+    public setOnConnect(callback: ()=> void): void {
         this.connectCallback = callback;
     }
-    protected afterConnect() {
+    protected afterConnect(): void {
         // set interval to do keep alive with the server every second
         this.interval = setInterval((function(this: HttpJsonClient) {
             postJson("http://localhost:80/keepAlive", {
@@ -72,13 +72,13 @@ class HttpJsonClient extends ClientBase {
                     if (!data.status) return;
                     this.onCall(data.commands, "");
                 } catch (err: any) {
-                    this.close();
+                    this.onError();
                 }
             }).bind(this));
         }).bind(this), 1000) as unknown as number;
         if (this.connectCallback) this.connectCallback();
     }
-    protected returnValue(returnId: string, returnVals: any[]) {
+    protected returnValue(returnId: string, returnVals: any[]): void {
         postJson("http://localhost:80/return", {
             id: this.connectionId,
             values: returnVals
@@ -87,7 +87,22 @@ class HttpJsonClient extends ClientBase {
                 const data: { status: boolean, commands: any[] } = JSON.parse(raw);
                 if (!data.status) return;
             } catch (err: any) {
-                this.close();
+                this.onError();
+            }
+        }).bind(this));
+    }
+    protected actuallyUpdateValue(name: string, value: any): void {
+        postJson("http://localhost:80/updateValue", {
+            id: this.connectionId,
+            name,
+            value
+        }).then((function(this: HttpJsonClient, raw: string) {
+            try {
+                const data: { status: boolean, commands: any[] } = JSON.parse(raw);
+                if (!data.status) return;
+            } catch (err: any) {
+                console.log(err);
+                this.onError();
             }
         }).bind(this));
     }

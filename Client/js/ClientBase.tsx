@@ -12,7 +12,8 @@ export type functionType = {
 };
 export type valueType = {
     name: string,
-    type: "String"|"Number"|"Bool"|"Color"
+    type: "String"|"Number"|"Bool"|"Color",
+    value: any
 };
 export type deviceType = {
     name: string,
@@ -89,8 +90,8 @@ export class ClientBase {
     }
     public addFunction(name: string, params: ("String"|"Number"|"Bool"|"Color")[], returnType: "String"|"Number"|"Bool"|"Color"|"None", callback: (...params: any[])=> any) {
         if (this.started) return;
-        this.self.functions?.push({
-            name: name,
+        this.self.functions!.push({
+            name,
             overloads: [
                 {
                     visible: true,
@@ -103,23 +104,46 @@ export class ClientBase {
         });
         this.funcNameToCallback[name] = callback;
     }
+    public addValue(name: string, type: ("String"|"Number"|"Bool"|"Color"), value: any, setter: ((value: any)=> undefined) | ((value: string)=> undefined) | ((value: number)=> undefined) | ((value: boolean)=> undefined)) {
+        if (this.started) return;
+        this.self.values!.push({
+            name,
+            type,
+            value
+        });
+        this.funcNameToCallback[name + ".set"] = setter;
+    }
+    public updateValue(name: string, value: any) {
+        if (!this.started) return;
+        for (let i = 0; i < this.self.values!.length; i++) {
+            if (this.self.values![i].name == name) {
+                this.actuallyUpdateValue(name, value);
+                return;
+            }
+        }
+        console.log("value with name \"" + name + "\" has not been created.");
+        return;
+    }
 
-    protected open() {
+    protected open(): void {
         console.error("Not Implemented Yet.");
     }
-    protected close() {
+    protected close(): void {
         console.error("Not Implemented Yet.");
     }
     protected async sendCmd(cmd: string): Promise<any> {
         console.error("Not Implemented Yet.");
         return undefined;
     }
-    protected connect() {
+    protected connect(): void {
         console.error("Not Implemented Yet.");
     }
     protected afterConnect() {
     }
-    protected returnValue(returnId: string, returnVals: any[]) {
+    protected returnValue(returnId: string, returnVals: any[]): void {
+        console.error("Not Implemented Yet.");
+    }
+    protected actuallyUpdateValue(name: string, value: any) {
         console.error("Not Implemented Yet.");
     }
 }

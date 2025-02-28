@@ -20,10 +20,10 @@ class HttpTextClient extends ClientBase {
         super(_name);
     }
     private interval: number = 0;
-    protected open() {
+    protected open(): void {
         this.onOpen();
     }
-    protected close() {
+    protected close(): void {
         this.connectionId = "";
         clearInterval(this.interval);
         this.onClose();
@@ -34,7 +34,7 @@ class HttpTextClient extends ClientBase {
         else return JSON.parse(val);
     }
     private connectionId: string = "";
-    protected connect() {
+    protected connect(): void {
         post("http://localhost:80/connect", this.self).then((function(this: HttpTextClient, data: string) {
             if (data == "Invalid") { this.close(); return; }
             this.connectionId = data;
@@ -42,10 +42,10 @@ class HttpTextClient extends ClientBase {
         }).bind(this));
     }
     private connectCallback: (()=> void)|undefined = undefined;
-    public setOnConnect(callback: ()=> void) {
+    public setOnConnect(callback: ()=> void): void {
         this.connectCallback = callback;
     }
-    protected afterConnect() {
+    protected afterConnect(): void {
         this.interval = setInterval((function(this: HttpTextClient) {
             post("http://localhost:80/keepAlive", {
                 id: this.connectionId
@@ -66,10 +66,19 @@ class HttpTextClient extends ClientBase {
         }).bind(this), 1000) as unknown as number;
         if (this.connectCallback) this.connectCallback();
     }
-    protected returnValue(returnId: string, returnVals: any[]) {
+    protected returnValue(returnId: string, returnVals: any[]): void {
         post("http://localhost:80/return", {
             id: this.connectionId,
             values: returnVals
+        }).then((function(this: HttpTextClient, data: string) {
+            if (data == "Invalid") this.close();
+        }).bind(this));
+    }
+    protected actuallyUpdateValue(name: string, value: any): void {
+        post("http://localhost:80/updateValue", {
+            id: this.connectionId,
+            name,
+            value
         }).then((function(this: HttpTextClient, data: string) {
             if (data == "Invalid") this.close();
         }).bind(this));
@@ -83,4 +92,6 @@ client.addFunction("func1", [], "None", () => {
 });
 client.start();
 client.setOnConnect(async () => {
+    const str: any = await client.call("esp8266.toggle()");
+    console.log("esp8266.toggle() -> " + str);
 });
