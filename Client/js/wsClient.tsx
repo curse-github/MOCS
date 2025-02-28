@@ -2,9 +2,9 @@ import { parameterType, functionType, valueType, deviceType, ClientBase } from "
 import { WebSocket, RawData } from "ws";// https://www.npmjs.com/package/ws
 
 function generateUUID(): string {
-    var a = new Date().getTime();// Timestamp
+    let a = new Date().getTime();// Timestamp
     return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c) {
-        var b = Math.random() * 16;// random number between 0 and 16
+        let b = Math.random() * 16;// random number between 0 and 16
         b = (a + b) % 16 | 0;
         a = Math.floor(a / 16);
         return (c === "x" ? b : ((b & 0x3) | 0x8)).toString(16);

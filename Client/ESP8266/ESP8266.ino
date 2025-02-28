@@ -17,7 +17,7 @@ enum class WaitingOnEnum {
   ReturnRes,
   Return
 };
-const std::string self = "{ \"name\": \"esp8266\", \"functions\": [ { \"name\": \"toggle\", \"overloads\": [{ \"visible\": true, \"parameters\": [], \"returnType\": \"None\" }] } ] }";
+const std::string self = "{ \"name\": \"ESP\", \"values\": [ { \"name\": \"lights\", \"type\": \"Bool\", \"value\": true } ] }";
 WaitingOnEnum waitingOn = WaitingOnEnum::None;
 std::string connectionId = "";
 bool isMocsActive = false;

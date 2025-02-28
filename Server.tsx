@@ -180,10 +180,14 @@ class WebsocketWrapper {
         return new Promise<void>((resolve: ()=> void) => {
             this.wss.on("connection", ((ws: WebSocket) => {
                 const key: string = generateUUID();
-                this.connectionIndexByKey[key] = this.connections.length;
-                this.connections.push(ws);
-                this.connectionKeys.push(key);
-                console.log("New connection with key \"" + key + "\"");
+                let index: number = -1;
+                for (let i: number = 0; i <= this.connections.length; i++) {
+                    if (this.connections[i] == undefined) { index = i; break; }
+                }
+                this.connections[index] = ws;
+                this.connectionKeys[index] = key;
+                this.connectionIndexByKey[key] = index;
+                // console.log("New connection with key \"" + key + "\"");
     
                 ws.on("error", ((...data: any[]) => {
                     ws.close();
@@ -470,7 +474,12 @@ class ConnectionHandler {
     constructor(websocketPort: number, httpPort: number) {
         this.wbsckt = new WebsocketWrapper(websocketPort);
         this.wbsckt.setOnConnection((function(this: ConnectionHandler, connectionKey: string) {
-            this.websocketConnectionKeys.push(connectionKey);
+            for (let i = 0; i <= this.websocketConnectionKeys.length; i++) {
+                if (this.websocketConnectionKeys[i] == undefined) {
+                    this.websocketConnectionKeys[i] = connectionKey;
+                    break;
+                }
+            }
             this.websocketWsLastPingTime[connectionKey] = (new Date()).getTime();
         }).bind(this));
         this.wbsckt.setOnClose((function(this: ConnectionHandler, connectionKey: string) {
@@ -491,7 +500,7 @@ class ConnectionHandler {
                     }
                 });
             }
-            console.log("Closed connection with key \"" + connectionKey + "\".");
+            // console.log("Closed connection with key \"" + connectionKey + "\".");
         }).bind(this));
         this.wbsckt.setOnJsonMessage((function(this: ConnectionHandler, connectionKey: string, data: any) {
             if (data.type == "pong") {
@@ -509,11 +518,16 @@ class ConnectionHandler {
                     console.error("Device name is taken");
                     return;
                 }
+                // Device is valid and not already connected.
                 console.log("Device \"" + data.device.name + "\" connected.");
-                this.deviceNameToIndex[data.device.name] = this.devices.length;
-                this.devices.push(data.device);
-                this.deviceWsConnectionKey.push(connectionKey);
-                this.deviceHttpConnectionIds.push(undefined);
+                let index: number = -1;
+                for (let i = 0; i <= this.devices.length; i++) {
+                    if (this.devices[i] == undefined) { index = i; break; }
+                }
+                this.devices[index] = data.device;
+                this.deviceNameToIndex[data.device.name] = index;
+                this.deviceWsConnectionKey[index] = connectionKey;
+                this.deviceHttpConnectionIds[index] = undefined;
             } else if (data.type == "call") {
                 if (data.returnId == undefined) { console.error("Call command missing returnId"); return; }
                 this.handleCallCmd(data).then((returnVal: any) => {
@@ -573,10 +587,15 @@ class ConnectionHandler {
             }
             console.log("Device \"" + req.body.name + "\" connected.");
             const connectionId: string = generateUUID();
-            this.deviceNameToIndex[req.body.name] = this.devices.length;
-            this.devices.push(req.body);
-            this.deviceWsConnectionKey.push(undefined);
-            this.deviceHttpConnectionIds.push(connectionId);
+
+            let index: number = -1;
+            for (let i = 0; i <= this.devices.length; i++) {
+                if (this.devices[i] == undefined) { index = i; break; }
+            }
+            this.devices[index] = req.body;
+            this.deviceNameToIndex[req.body.name] = index;
+            this.deviceWsConnectionKey[index] = undefined;
+            this.deviceHttpConnectionIds[index] = connectionId;
             this.deviceHttpLastPingTime[connectionId] = (new Date()).getTime();
             this.httpCmdQueue[connectionId] = [];
             this.httpReturnResolveLists[connectionId] = [];
@@ -621,7 +640,10 @@ class ConnectionHandler {
             });
         }).bind(this));
         this.exprs.post("/return", (function(this: ConnectionHandler, req: Request, res: Response) {
-            if (this.httpReturnResolveLists[req.body.id] == undefined) {
+            if (
+                (this.httpReturnResolveLists[req.body.id] == undefined)
+                || (this.httpReturnResolveLists[req.body.id].length == 0)
+            ) {
                 if (req.headers.accept == "application/json")// client requested json
                     res.status(200).json({ status: false });
                 else if (req.headers.accept == "application/text")// client requested text
@@ -711,7 +733,7 @@ class ConnectionHandler {
             }
             this.setValueOnDevice([ device.name ], req.body.name, validParamValue);
             // call function on subscribers
-            
+
             if (req.headers.accept == "application/json")// client requested json
                 res.status(200).json({ status: true });
             else if (req.headers.accept == "application/text")// client requested text
@@ -823,6 +845,9 @@ class ConnectionHandler {
     async handleCallCmd({ type, cmd }: {type: "call", cmd: string }): Promise<any> {
         // cmd must have form "device.function(param)" or "device.function()"
         if ((typeof cmd) !== "string") { console.error("Command is not of type string."); return "None"; }
+        if (cmd.toLowerCase().trim() === "getdevices()") {
+            return JSON.stringify(this.devices);
+        }
         const splt1: string[] = cmd.split("(");
         // must have something on both sides of a '(', and nothing after the ')'
         if (splt1.length != 2) { console.error("Command is invalid format."); return "None"; }

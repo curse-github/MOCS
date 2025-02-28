@@ -1,11 +1,22 @@
 <html>
     <head>
         <script>
+            function generateUUID() {
+                let a = new Date().getTime();// Timestamp
+                return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c) {
+                    let b = Math.random() * 16;// random number between 0 and 16
+                    b = (a + b) % 16 | 0;
+                    a = Math.floor(a / 16);
+                    return (c === "x" ? b : ((b & 0x3) | 0x8)).toString(16);
+                });
+            }
             const url = "localhost";
             const port = "8080";
             let ws = null;
             let connected = false;
             let connecting = false;
+            let returnIdToCallback = {};
+            let callQueue = [];
             setInterval(() => {
                 if (ws.readyState != ws.OPEN) connected = false;
                 if (!connected && !connecting) {
@@ -29,49 +40,72 @@
                         ws.close();
                 }
                 ws.onopen = () => {
+                    console.clear();
+                    console.log("Websocket connected.")
                     connecting = false;
                     connected = true;
-                    ws.onmessage = (data) => {
-                        console.log(data);
+                    for (let i = 0; i < callQueue.length; i++) {
+                        const [ returnId, cmd ] = callQueue[i];
+                        ws.send(JSON.stringify({ type: "call", cmd, returnId }));
+                    }
+                    ws.onmessage = (messageE) => {
+                        const raw = messageE.data;
+                        try {
+                            const data = JSON.parse(raw);
+                            if (data.type == "ping") {
+                                ws.send(JSON.stringify({ type: "pong" }));
+                                return;
+                            } else if (data.type == "return") {
+                                if (returnIdToCallback[data.returnId] != undefined)
+                                    returnIdToCallback[data.returnId](data.value);
+                            } else {
+                                console.log(data);
+                            }
+                        } catch (err) {}
                     };
                 }
             }
             setup();
+            async function call(cmd) {
+                const returnId = generateUUID();
+                if (connected)
+                    ws.send(JSON.stringify({ type: "call", cmd, returnId }));
+                else
+                    callQueue.push([ returnId, cmd ]);
+                const returnVal = await (new Promise((resolve) => {
+                    returnIdToCallback[returnId] = resolve;
+                }));
+                if (returnVal == "None") return undefined;
+                else return JSON.parse(returnVal);
+            }
         </script>
         <script>
-            async function httpReqJson(hostname, method, body) {
-                return (await fetch(hostname, {
-                    method,
-                    headers: {
-                        "Accept": "application/json",
-                        "Content-Type": "application/json"
-                    },
-                    body
-                })).text();
+            async function processDevice(device) {
+                if (device.functions != undefined) {
+                    for (let i = 0; i < device.functions.length; i++) {
+                        const func = device.functions[i];
+                        console.log(device.name + "." + func.name + "(" + func.overloads[0].parameters.map((param) => "\"" + param.type + "\"").join(", ") + ")");
+                    }
+                }
+                if (device.values != undefined) {
+                    for (let i = 0; i < device.values.length; i++) {
+                        const value = device.values[i];
+                        console.log(device.name + "." + value.name + " = " + JSON.stringify(value.value));
+                        console.log(device.name + "." + value.name + ".get(\"" + value.type + "\")");
+                        console.log(device.name + "." + value.name + ".set(\"" + value.type + "\")");
+                    }
+                }
             }
-            async function postJson(hostname, body) {
-                return httpReqJson(hostname, "POST", JSON.stringify(body));
-            }
-            async function getJson(hostname, body) {
-                return httpReqJson(hostname, "GET", undefined);
-            }
-            async function call(cmd) {
-                const tmp = JSON.parse(await postJson("/call", { type: "call", cmd })).value;
-                if (tmp == "None") return undefined;
-                else return JSON.parse(tmp);
-            }
-            getJson("/getDevices").then((data) => {
-                console.log(JSON.parse(data));
-            });
-            call("esp8266.lights.get()").then((val) => {
-                console.log("val1 = " + val);
-                document.getElementById("val1.value").checked = val;
+            call("getDevices()").then((data) => {
+                data.forEach(processDevice);
+            })
+            call("ESP.lights.get()").then((val) => {
+                document.getElementById("ESP.lights.value").checked = val;
             })
         </script>
     </head>
     <body>
-        <input type="button" value="Toggle" onclick="call('esp8266.toggle()');">
-        <input type="checkbox" name="val1" id="esp8266.lights.value">
-        <input type="button" value="Set Val1" onclick='call("esp8266.lights.set(\"" + document.getElementById("esp8266.lights.value").value + "\")");'>
+        <label for="ESP.lights.value">ESP.lights</label>
+        <input type="checkbox" name="ESP.lights.value" id="ESP.lights.value" onchange='call("ESP.lights.set(" + (document.getElementById("ESP.lights.value").checked?"true":"false") + ")");'>
     </body>
 </html>
