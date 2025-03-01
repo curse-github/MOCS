@@ -87,11 +87,8 @@ class HttpTextClient extends ClientBase {
 
 const name: string = "HttpTextDevice";
 const client: HttpTextClient = new HttpTextClient(name);
-client.addFunction("func1", [], "None", () => {
+client.addFunction("func1", [], [], "None", () => {
     console.log("func1()");
 });
 client.start();
-client.setOnConnect(async () => {
-    const str: any = await client.call("esp8266.toggle()");
-    console.log("esp8266.toggle() -> " + str);
-});
+client.setOnConnect(async () => {});

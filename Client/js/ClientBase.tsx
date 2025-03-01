@@ -64,7 +64,7 @@ export class ClientBase {
         this.callQueue = [];
     }
     protected onCall(commands: { func: string, parameters: any[] }[], returnId: string) {
-        // get return value of each call and 
+        // get return value of each call and
         const returnVals: any[] = commands.map(({ func, parameters }: { func: string, parameters: any[] }) => this.funcNameToCallback[func](...parameters));
         this.returnValue(returnId, returnVals);
     }
@@ -88,15 +88,15 @@ export class ClientBase {
         }
         return this.sendCmd(cmd);
     }
-    public addFunction(name: string, params: ("String"|"Number"|"Bool"|"Color")[], returnType: "String"|"Number"|"Bool"|"Color"|"None", callback: (...params: any[])=> any) {
+    public addFunction(name: string, params: ("String"|"Number"|"Bool"|"Color")[], defaultValues: any[], returnType: "String"|"Number"|"Bool"|"Color"|"None", callback: (...params: any[])=> any) {
         if (this.started) return;
         this.self.functions!.push({
             name,
             overloads: [
                 {
                     visible: true,
-                    parameters: params.map((type: "String"|"Number"|"Bool"|"Color") => {
-                        return { type, defaultValue: undefined };
+                    parameters: params.map((type: "String"|"Number"|"Bool"|"Color", index: number) => {
+                        return { type, defaultValue: defaultValues[index] };
                     }),
                     returnType
                 }
@@ -104,7 +104,7 @@ export class ClientBase {
         });
         this.funcNameToCallback[name] = callback;
     }
-    public addValue(name: string, type: ("String"|"Number"|"Bool"|"Color"), value: any, setter: ((value: any)=> undefined) | ((value: string)=> undefined) | ((value: number)=> undefined) | ((value: boolean)=> undefined)) {
+    public addValue(name: string, type: ("String"|"Number"|"Bool"|"Color"), value: any, setter: ((value: any)=> void) | ((value: string)=> void) | ((value: number)=> void) | ((value: boolean)=> void)) {
         if (this.started) return;
         this.self.values!.push({
             name,

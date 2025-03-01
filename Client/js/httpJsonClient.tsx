@@ -110,7 +110,7 @@ class HttpJsonClient extends ClientBase {
 
 const name: string = "HttpJsonDevice";
 const client: HttpJsonClient = new HttpJsonClient(name);
-client.addFunction("func1", [], "None", () => {
+client.addFunction("func1", [], [], "None", () => {
     console.log("func1()");
 });
 client.start();

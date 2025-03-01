@@ -90,8 +90,35 @@ class WsClient extends ClientBase {
 }
 const name: string = "WsDevice";
 const client: WsClient = new WsClient(name);
-client.addFunction("func1", [], "None", () => {
+client.addFunction("func1", [], [], "None", () => {
     console.log("func1()");
+});
+client.addFunction("func2", [ "String" ], [ ], "None", (str: string) => {
+    console.log("func2(\"" + str + "\")");
+});
+client.addFunction("func3", [ "Number" ], [ ], "None", (num: number) => {
+    console.log("func3(" + num + ")");
+});
+client.addFunction("func4", [ "Bool" ], [ ], "None", (bool: boolean) => {
+    console.log("func4(" + (bool ? "true" : "false") + ")");
+});
+client.addFunction("func5", [ "Color" ], [ ], "None", (col: string) => {
+    console.log("func5(" + col + ")");
+});
+client.addValue("val1", "String", "", (val: string) => {
+    console.log("val1 = \"" + val + "\"");
+    client.updateValue("val1", val + "-");
+});
+client.addValue("val2", "Number", 0, (val: number) => {
+    console.log("val2 = " + val);
+    client.updateValue("val2", val + 1);
+});
+client.addValue("val3", "Bool", false, (val: boolean) => {
+    console.log("val3 = " + (val ? "true" : "false"));
+});
+client.addValue("val4", "Color", "#000000", (val: string) => {
+    console.log("val4 = \"" + val + "\"");
+    client.updateValue("val4", val.substring(0, 6) + "0");
 });
 client.start();
 client.setOnConnect(async () => {});
