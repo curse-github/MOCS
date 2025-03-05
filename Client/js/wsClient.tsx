@@ -113,7 +113,9 @@ client.addValue("val2", "Number", 0, (val: number) => {
     console.log("val2 = " + val);
     client.updateValue("val2", val + 1);
 });
+let lastVal3 = false;
 client.addValue("val3", "Bool", false, (val: boolean) => {
+    lastVal3 = val;
     console.log("val3 = " + (val ? "true" : "false"));
 });
 client.addValue("val4", "Color", "#000000", (val: string) => {
@@ -121,4 +123,9 @@ client.addValue("val4", "Color", "#000000", (val: string) => {
     client.updateValue("val4", val.substring(0, 6) + "0");
 });
 client.start();
-client.setOnConnect(async () => {});
+client.setOnConnect(async () => {
+    /* setInterval(() => {
+        lastVal3 = !lastVal3;
+        client.updateValue("val3", lastVal3);
+    }, 1500);*/
+});

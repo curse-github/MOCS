@@ -115,8 +115,8 @@ class WebsocketWrapper {
     // send to single websocket
     send(key: string, data: string): void {
         // verify key and index
-        if (key === undefined) return;
-        if (this.connectionIndexByKey[key] === undefined) return;
+        if (key == undefined) return;
+        if (this.connectionIndexByKey[key] == undefined) return;
         const index: number = this.connectionIndexByKey[key];
         // send string data
         this.connections[index].send(data);
@@ -153,7 +153,7 @@ class WebsocketWrapper {
     sendEach(generator: (key: string)=> string): void {
         for (let i = 0; i < this.connectionKeys.length; i++) {
             // verify key and index
-            if (this.connectionKeys[i] === undefined) continue;
+            if (this.connectionKeys[i] == undefined) continue;
             const key: string = this.connectionKeys[i];
             this.send(key, generator(key));
         }
@@ -161,7 +161,7 @@ class WebsocketWrapper {
     sendJsonEach(generator: (key: string)=> any): void {
         for (let i = 0; i < this.connectionKeys.length; i++) {
             // verify key and index
-            if (this.connectionKeys[i] === undefined) continue;
+            if (this.connectionKeys[i] == undefined) continue;
             const key: string = this.connectionKeys[i];
             this.sendJson(key, generator(key));
         }
@@ -170,8 +170,8 @@ class WebsocketWrapper {
 
     closeConnection(key: string): void {
         // verify key and index
-        if (key === undefined) return;
-        if (this.connectionIndexByKey[key] === undefined) return;
+        if (key == undefined) return;
+        if (this.connectionIndexByKey[key] == undefined) return;
         const index: number = this.connectionIndexByKey[key];
         // close connection
         this.connections[index].close();
@@ -182,7 +182,7 @@ class WebsocketWrapper {
                 const key: string = generateUUID();
                 let index: number = -1;
                 for (let i: number = 0; i <= this.connections.length; i++) {
-                    if (this.connections[i] === undefined) { index = i; break; }
+                    if (this.connections[i] == undefined) { index = i; break; }
                 }
                 this.connections[index] = ws;
                 this.connectionKeys[index] = key;
@@ -352,7 +352,7 @@ function verifyParamOfType(param: string, paramFormat: "String" | "Number" | "Bo
 }
 function verifyReturnOfType(returnVal: any, returnType: "String" | "Number" | "Bool" | "Color" | "None"): [ boolean, any ] {
     if (returnType === "None") {
-        if (returnVal === undefined) return [ true, "None" ];
+        if (returnVal == undefined) return [ true, "None" ];
         return [ false, undefined ];
     } else {
         return verifyParamOfType(JSON.stringify(returnVal), returnType);
@@ -363,7 +363,7 @@ function verifyParameter(param: parameterType): [ boolean, string ] {
     if (
         (param.type !== "String") && (param.type !== "Number") && (param.type !== "Bool") && (param.type !== "Color")
     ) return [ false, "" ];
-    if (param.defaultValue === undefined) {
+    if (param.defaultValue == undefined) {
         switch (param.type) {
             case "String":
                 param.defaultValue = "";
@@ -502,7 +502,7 @@ class ConnectionHandler {
         this.wbsckt = new WebsocketWrapper(websocketPort);
         this.wbsckt.setOnConnection((function(this: ConnectionHandler, connectionKey: string) {
             for (let i = 0; i <= this.websocketConnectionKeys.length; i++) {
-                if (this.websocketConnectionKeys[i] === undefined) {
+                if (this.websocketConnectionKeys[i] == undefined) {
                     this.websocketConnectionKeys[i] = connectionKey;
                     break;
                 }
@@ -559,7 +559,7 @@ class ConnectionHandler {
                 console.log("Device \"" + data.device.name + "\" connected.");
                 let index: number = -1;
                 for (let i = 0; i <= this.devices.length; i++) {
-                    if (this.devices[i] === undefined) { index = i; break; }
+                    if (this.devices[i] == undefined) { index = i; break; }
                 }
                 this.devices[index] = data.device;
                 this.deviceNameToIndex[data.device.name] = index;
@@ -576,7 +576,7 @@ class ConnectionHandler {
                     }
                 }
             } else if (data.type === "call") {
-                if (data.returnId === undefined) { console.error("Call command missing returnId"); return; }
+                if (data.returnId == undefined) { console.error("Call command missing returnId"); return; }
                 this.handleCallCmd(data).then((returnVal: any) => {
                     this.wbsckt.sendJson(connectionKey, {
                         type: "return",
@@ -585,10 +585,10 @@ class ConnectionHandler {
                     });
                 });
             } else if (data.type === "return") {
-                if (data.returnId === undefined) { console.error("Return command missing returnId"); return; }
+                if (data.returnId == undefined) { console.error("Return command missing returnId"); return; }
                 const deviceIndex = this.deviceWsConnectionKey.indexOf(connectionKey);
                 if (deviceIndex === -1) return;
-                if (this.wsReturnResolves[data.returnId] === undefined) return;
+                if (this.wsReturnResolves[data.returnId] == undefined) return;
                 this.wsReturnResolves[data.returnId][1](data.value);
                 delete this.wsReturnResolves[data.returnId];
             } else if (data.type === "updateValue") {
@@ -596,23 +596,33 @@ class ConnectionHandler {
                 if (deviceIndex === -1) { console.log("This ws connection does not have a device."); return; }
                 const device = this.devices[deviceIndex];
                 const value: valueType|undefined = this.getValueObjOnDevice([ device.name ], data.name);
-                if (value === undefined) { console.log("Value with that name was not found."); return; }
+                if (value == undefined) { console.log("Value with that name was not found."); return; }
                 const [ paramValid, validParamValue ] = verifyParamOfType(JSON.stringify(data.value), value.type);
                 if (!paramValid) { console.log("Updated value did not match value type"); return; }
                 if (value.value === validParamValue) return;
                 this.setValueOnDevice([ device.name ], data.name, validParamValue);
+
                 // call function on subscribers
-    
+                for (let i = 0; i < this.deviceWsSubscriptions.length; i++) {
+                    const [ user, key ]: [ any, string ] = this.deviceWsSubscriptions[i];
+                    if (user.isAdmin) {
+                        this.wbsckt.send(key, JSON.stringify({
+                            type: "update",
+                            name: [ ...device.name.split("."), value.name ],
+                            value: validParamValue
+                        }));
+                    }
+                }
                 return;
             } else if (data.type === "subscribe") {
-                if ((data.user === undefined) || (data.pass === undefined)) return;
+                if ((data.user == undefined) || (data.pass == undefined)) return;
                 if ((data.user === "") || (data.pass === "")) return;
-                if (userIndexByName[data.user] === undefined) return;
+                if (userIndexByName[data.user] == undefined) return;
                 const userIndex = userIndexByName[data.user];
                 const user = users[userIndex];
                 let index: number = -1;
                 for (let i = 0; i <= this.deviceWsSubscriptions.length; i++) {
-                    if (this.deviceWsSubscriptions[i] === undefined) { index = i; break; }
+                    if (this.deviceWsSubscriptions[i] == undefined) { index = i; break; }
                 }
                 this.deviceWsSubscriptions[index] = [ user, connectionKey ];
 
@@ -657,7 +667,7 @@ class ConnectionHandler {
 
             let index: number = -1;
             for (let i = 0; i <= this.devices.length; i++) {
-                if (this.devices[i] === undefined) { index = i; break; }
+                if (this.devices[i] == undefined) { index = i; break; }
             }
             this.devices[index] = req.body;
             this.deviceNameToIndex[req.body.name] = index;
@@ -684,7 +694,7 @@ class ConnectionHandler {
             }
         }).bind(this));
         this.exprs.post("/keepAlive", (function(this: ConnectionHandler, req: Request, res: Response) {
-            if (this.deviceHttpLastPingTime[req.body.id] === undefined) {
+            if (this.deviceHttpLastPingTime[req.body.id] == undefined) {
                 if (req.headers.accept === "application/json")// client requested json
                     res.status(200).json({ status: false, commands: [] });
                 else if (req.headers.accept === "application/text")// client requested text
@@ -718,7 +728,7 @@ class ConnectionHandler {
         }).bind(this));
         this.exprs.post("/return", (function(this: ConnectionHandler, req: Request, res: Response) {
             if (
-                (this.httpReturnResolveLists[req.body.id] === undefined)
+                (this.httpReturnResolveLists[req.body.id] == undefined)
                 || (this.httpReturnResolveLists[req.body.id].length === 0)
             ) {
                 if (req.headers.accept === "application/json")// client requested json
@@ -758,7 +768,7 @@ class ConnectionHandler {
                 res.status(404).send("<html><body>404 Page Not Found</body></html>");
         }).bind(this));
         this.exprs.post("/updateValue", (function(this: ConnectionHandler, req: Request, res: Response) {
-            if (this.deviceHttpLastPingTime[req.body.id] === undefined) {
+            if (this.deviceHttpLastPingTime[req.body.id] == undefined) {
                 if (req.headers.accept === "application/json")// client requested json
                     res.status(200).json({ status: false });
                 else if (req.headers.accept === "application/text")// client requested text
@@ -779,7 +789,7 @@ class ConnectionHandler {
             }
             const device = this.devices[deviceIndex];
             const value: valueType|undefined = this.getValueObjOnDevice([ device.name ], req.body.name);
-            if (value === undefined) {
+            if (value == undefined) {
                 if (req.headers.accept === "application/json")// client requested json
                     res.status(200).json({ status: false });
                 else if (req.headers.accept === "application/text")// client requested text
@@ -810,6 +820,16 @@ class ConnectionHandler {
             }
             this.setValueOnDevice([ device.name ], req.body.name, validParamValue);
             // call function on subscribers
+            for (let i = 0; i < this.deviceWsSubscriptions.length; i++) {
+                const [ user, key ]: [ any, string ] = this.deviceWsSubscriptions[i];
+                if (user.isAdmin) {
+                    this.wbsckt.send(key, JSON.stringify({
+                        type: "update",
+                        name: [ ...device.name.split("."), value.name ],
+                        value: validParamValue
+                    }));
+                }
+            }
 
             if (req.headers.accept === "application/json")// client requested json
                 res.status(200).json({ status: true });
@@ -828,7 +848,7 @@ class ConnectionHandler {
             const nextDeviceName = devicePath[i];
             let found: boolean = false;
             for (let j = 0; j < currDeviceList.length; j++) {
-                if (currDeviceList[j] === undefined) continue;
+                if (currDeviceList[j] == undefined) continue;
                 const device: deviceType = currDeviceList[j];
                 if (device.name === nextDeviceName) {
                     currDeviceList = device.children || [];
@@ -840,12 +860,12 @@ class ConnectionHandler {
         let foundDevice: deviceType|undefined = undefined;
         const nextDeviceName = devicePath[devicePath.length - 1];
         for (let j = 0; j < currDeviceList.length; j++) {
-            if (currDeviceList[j] === undefined) continue;
+            if (currDeviceList[j] == undefined) continue;
             const device: deviceType = currDeviceList[j];
             if (device.name === nextDeviceName)
                 foundDevice = device;
         }
-        if (foundDevice === undefined) return undefined;
+        if (foundDevice == undefined) return undefined;
         const funcs: functionType[] = foundDevice.functions || [];
         // find function
         for (let j = 0; j < funcs.length; j++) {
@@ -861,7 +881,7 @@ class ConnectionHandler {
             const nextDeviceName = devicePath[i];
             let found: boolean = false;
             for (let j = 0; j < currDeviceList.length; j++) {
-                if (currDeviceList[j] === undefined) continue;
+                if (currDeviceList[j] == undefined) continue;
                 const device: deviceType = currDeviceList[j];
                 if (device.name === nextDeviceName) {
                     currDeviceList = device.children || [];
@@ -873,12 +893,12 @@ class ConnectionHandler {
         let foundDevice: deviceType|undefined = undefined;
         const nextDeviceName = devicePath[devicePath.length - 1];
         for (let j = 0; j < currDeviceList.length; j++) {
-            if (currDeviceList[j] === undefined) continue;
+            if (currDeviceList[j] == undefined) continue;
             const device: deviceType = currDeviceList[j];
             if (device.name === nextDeviceName)
                 foundDevice = device;
         }
-        if (foundDevice === undefined) return undefined;
+        if (foundDevice == undefined) return undefined;
         const values: valueType[] = foundDevice.values || [];
         // find value
         for (let j = 0; j < values.length; j++) {
@@ -894,7 +914,7 @@ class ConnectionHandler {
             const nextDeviceName = devicePath[i];
             let found: boolean = false;
             for (let j = 0; j < currDeviceList.length; j++) {
-                if (currDeviceList[j] === undefined) continue;
+                if (currDeviceList[j] == undefined) continue;
                 const device: deviceType = currDeviceList[j];
                 if (device.name === nextDeviceName) {
                     currDeviceList = device.children || [];
@@ -906,12 +926,12 @@ class ConnectionHandler {
         let foundDevice: deviceType|undefined = undefined;
         const nextDeviceName = devicePath[devicePath.length - 1];
         for (let j = 0; j < currDeviceList.length; j++) {
-            if (currDeviceList[j] === undefined) continue;
+            if (currDeviceList[j] == undefined) continue;
             const device: deviceType = currDeviceList[j];
             if (device.name === nextDeviceName)
                 foundDevice = device;
         }
-        if (foundDevice === undefined) return undefined;
+        if (foundDevice == undefined) return undefined;
         // find value
         for (let j = 0; j < foundDevice.values!.length; j++) {
             if (foundDevice.values![j].name === valueName)
@@ -937,7 +957,7 @@ class ConnectionHandler {
         const callSig: string[] = callSigStr.split(".");
         if (callSig.length < 2) { console.error("Command is invalid format."); return "None"; }
         const deviceIndex: number = this.deviceNameToIndex[callSig[0]];// the index of the device
-        if (deviceIndex === undefined) { console.error("Command attempted to call function on non-existant device."); return "None"; }
+        if (deviceIndex == undefined) { console.error("Command attempted to call function on non-existant device."); return "None"; }
         // get overloads of the function, or undefined if it does not exist
         const funcName: string = callSig.pop()!;
         if (funcName === "get") {
@@ -950,7 +970,7 @@ class ConnectionHandler {
             return await this.handleGetSetCmd(callSig, value, "set", paramsStr2.split(","));
         }
         const overloads: { visible: boolean, parameters: parameterType[], returnType: "String"|"Number"|"Bool"|"Color"|"None" }[]|undefined = this.getFunctionParamsOnDevice(callSig, funcName);
-        if (overloads === undefined) { console.error("Command attempted to call non-existant function."); return "None"; }
+        if (overloads == undefined) { console.error("Command attempted to call non-existant function."); return "None"; }
         // check each overload if it is valid for the given parameters
         const params: string[] = paramsStr2.split(",");
         let finalParams: any[] = [];
@@ -1007,10 +1027,10 @@ class ConnectionHandler {
     }
     async handleGetSetCmd(deviceCallSig: string[], valueName: string, type: "get" | "set", params: string[]): Promise<any> {
         const deviceIndex: number = this.deviceNameToIndex[deviceCallSig[0]];// the index of the device
-        if (deviceIndex === undefined) { console.error("Command attempted to call function on non-existant device."); return "None"; }
+        if (deviceIndex == undefined) { console.error("Command attempted to call function on non-existant device."); return "None"; }
         // get value 
         const value: valueType|undefined = this.getValueObjOnDevice(deviceCallSig, valueName);
-        if (value === undefined) { console.error("Command attempted to " + type + " value of non-existant value."); return "None"; }
+        if (value == undefined) { console.error("Command attempted to " + type + " value of non-existant value."); return "None"; }
         // do action based on type
         if (type === "get") {
             if ((params.length != 0) && !((params.length === 1) && params[0] === "")) { console.error("Getters do not take arguments."); return "None"; }
@@ -1023,7 +1043,7 @@ class ConnectionHandler {
             if (value.value === validParamValue) return "None";// if the value you are setting it to is the same as the current value then dont bother setting it
             const key: string|undefined = this.deviceWsConnectionKey[deviceIndex];
             const id: string|undefined = this.deviceHttpConnectionIds[deviceIndex];
-            if ((key === undefined) && (id === undefined)) return "None";
+            if ((key == undefined) && (id == undefined)) return "None";
             let returnVal: any = "None";
             this.setValueOnDevice(deviceCallSig, valueName, validParamValue);
             if (key != undefined) {
@@ -1068,7 +1088,7 @@ class ConnectionHandler {
                 setTimeout(() => {
                     const currTime: number = (new Date()).getTime();
                     for (let i: number = 0; i < this.websocketConnectionKeys.length; i++) {
-                        if (this.websocketConnectionKeys[i] === undefined) continue;
+                        if (this.websocketConnectionKeys[i] == undefined) continue;
                         const key: string = this.websocketConnectionKeys[i];
                         if ((currTime - this.websocketWsLastPingTime[key]) > intervalTime) {
                             // close connection and clear related data
@@ -1077,7 +1097,7 @@ class ConnectionHandler {
                     }
                 }, 1500);
                 for (let i: number = 0; i < this.deviceHttpConnectionIds.length; i++) {
-                    if (this.deviceHttpConnectionIds[i] === undefined) continue;
+                    if (this.deviceHttpConnectionIds[i] == undefined) continue;
                     const id: string = this.deviceHttpConnectionIds[i] as string;
                     if (
                         ((new Date()).getTime() - this.deviceHttpLastPingTime[id]!) > intervalTime

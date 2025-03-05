@@ -3,10 +3,11 @@ void outputInit() {
   setState(true);
 }
 bool state = false;
-void setState(bool _state) {
+bool setState(bool _state) {
   state=_state;
   digitalWrite(outputPin,state?LOW:HIGH);
+  return state;
 }
-void toggle() {
-  setState(!state);
+bool toggle() {
+  return setState(!state);
 }

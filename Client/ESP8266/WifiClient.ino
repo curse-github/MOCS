@@ -54,7 +54,7 @@ bool startPostRequest(const char *host, const int &port, const char *path, const
   if (!finishedRecieving) return false;
 #if _WIFI_DEBUG
   myPrintln();
-  myPrintln("Starting connection to server...");
+  //myPrintln("Starting connection to server...");
 #endif
   // if you get a connection, report back via serial
   if (client.connect(host, port)) {
@@ -77,9 +77,9 @@ bool startPostRequest(const char *host, const int &port, const char *path, const
     client.println();
     client.println(postData.c_str());
     
-#if _WIFI_DEBUG
+/*#if _WIFI_DEBUG
     myPrintln("Waiting until avaliable");
-#endif
+#endif*/
     startedRecieving = false;
     lastwasAvaliable = false;
     finishedRecieving = false;
@@ -99,9 +99,9 @@ std::string continuePostRequest() {
   if (finishedRecieving) return "";
   if (!startedRecieving) {
     if (!client.available()) return "";
-#if _WIFI_DEBUG
+/*#if _WIFI_DEBUG
     myPrintln("Client is avaliable");
-#endif
+#endif*/
     startedRecieving=true;
     lastwasAvaliable=true;
   } else {
@@ -109,10 +109,10 @@ std::string continuePostRequest() {
     else {
       if (lastwasAvaliable) {
         lastwasAvaliable=false;
-#if _WIFI_DEBUG
+/*#if _WIFI_DEBUG
         myPrintln("Get Request finished.");
         myPrintln("Waiting until disconnected.");
-#endif
+#endif*/
       }
       if (client.connected()) return "";
       else {
@@ -137,37 +137,6 @@ std::string continuePostRequest() {
     }
   }
   return "";
-}
-void continuePostRequestIgnoreData() {
-  if (!wifiClientStatus()) return;
-  if (finishedRecieving) return;
-  if (!startedRecieving) {
-    if (!client.available()) return;
-#if _WIFI_DEBUG
-    myPrintln("Client is avaliable");
-#endif
-    startedRecieving=true;
-    lastwasAvaliable=true;
-  } else {
-    if (client.available()) { client.read(); return; }
-    else {
-      if (lastwasAvaliable) {
-        lastwasAvaliable=false;
-#if _WIFI_DEBUG
-        myPrintln("Get Request finished.");
-        myPrintln("Waiting until disconnected.");
-#endif
-      }
-      if (client.connected()) return;
-      else {
-        finishedRecieving=true;
-#if _WIFI_DEBUG
-        myPrintln("Stopping Client.");
-#endif
-        client.stop();
-      }
-    }
-  }
 }
 bool isPostRequestDone() {
   return finishedRecieving;

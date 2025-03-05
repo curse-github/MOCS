@@ -17,24 +17,28 @@ enum class WaitingOnEnum {
   ReturnRes,
   Return
 };
-const std::string self = "{ \"name\": \"ESP\", \"values\": [ { \"name\": \"lights\", \"type\": \"Bool\", \"value\": true } ] }";
-WaitingOnEnum waitingOn = WaitingOnEnum::None;
-std::string connectionId = "";
 bool isMocsActive = false;
+const std::string self = "{ \"name\": \"ESP\", \"values\": [ { \"name\": \"lights\", \"type\": \"Bool\", \"value\": true } ] }";
+std::string connectionId = "";
 unsigned long lastKeepAliveTime = 0;
+WaitingOnEnum waitingOn = WaitingOnEnum::None;
 void setup() {
   serialInit();
   wifiInitConnection("CurseNet24", "simpsoncentral");
+  while (!wifiClientStatus()) {
+    wifiInitConnection("CurseNet24", "simpsoncentral");
+  }
   sensorInit();
   outputInit();
-  if (wifiClientStatus())
-    if (startPostRequest("192.168.0.105",80,"/connect", self))
-      waitingOn = WaitingOnEnum::Key;
+  while (!startPostRequest("192.168.0.105",80,"/connect", self)&&wifiClientStatus()) {}
+  waitingOn = WaitingOnEnum::Key;
 }
 void connectionClosed() {
   myPrintln("Mocs connection closed.");
-  connectionId = "";
   isMocsActive = false;
+  connectionId = "";
+  waitingOn = WaitingOnEnum::None;
+  lastKeepAliveTime = 0;
 }
 void loop() {
   if (wifiClientStatus() && !isPostRequestDone()) {
@@ -98,21 +102,56 @@ void loop() {
     }
     lastKeepAliveTime = millis();
   }
+  if (!wifiClientStatus()) {
+    wifiInitConnection("CurseNet24", "simpsoncentral");
+    if (wifiClientStatus()) {
+      while (!startPostRequest("192.168.0.105",80,"/connect", self)&&wifiClientStatus()) {}
+      waitingOn = WaitingOnEnum::Key;
+    }
+  }
   onButton(sensorRead());
 }
 void onButton(const char &button) {
   if (button=='E') return;
+  bool newState = false;
+  std::string msg = "";
   switch(button) {
     case 'p':// Power
-      toggle();
+      newState = toggle();
+      if (isMocsActive) {
+        msg = "{\"id\":\"";
+        msg += connectionId;
+        msg += "\", \"name\": \"lights\", \"value\": ";
+        msg += (newState?"true":"false");
+        msg += " }";
+        if (startPostRequest("192.168.0.105",80,"/updateValue", msg))
+          waitingOn = WaitingOnEnum::ReturnRes;
+        else { connectionClosed(); return; }
+      }
       break;
     case '^':// Up
       setState(true);
+      if (isMocsActive) {
+        msg = "{\"id\":\"";
+        msg += connectionId;
+        msg += "\", \"name\": \"lights\", \"value\": true }";
+        if (startPostRequest("192.168.0.105",80,"/updateValue", msg))
+          waitingOn = WaitingOnEnum::ReturnRes;
+        else { connectionClosed(); return; }
+      }
       break;
     case 'v':// Down
     case 'f':// FUNC/STOP
     case 's':// ST/REPT
       setState(false);
+      if (isMocsActive) {
+        msg = "{\"id\":\"";
+        msg += connectionId;
+        msg += "\", \"name\": \"lights\", \"value\": false }";
+        if (startPostRequest("192.168.0.105",80,"/updateValue", msg))
+          waitingOn = WaitingOnEnum::ReturnRes;
+        else { connectionClosed(); return; }
+      }
       break;
     case 't':// toggle or play/pause
       break;

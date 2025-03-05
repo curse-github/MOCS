@@ -18,6 +18,7 @@
             let returnIdToCallback = {};
             let callQueue = [];
             let numConnectedDevices = 0;
+            let updateCallbacks = {};
             function setup() {
                 connecting = true;
                 ws = new WebSocket("ws://" + url + ":" + port);
@@ -30,13 +31,13 @@
                     numConnectedDevices = 0;
                     setup();
                 }
-                ws.onerror = () => {
-                    console.log("Websocket error.");
-                    if (ws.readyState == ws.OPEN)
-                        ws.close();
-                }
+                    ws.onerror = () => {
+                        console.log("Websocket error.");
+                        if (ws.readyState == ws.OPEN)
+                            ws.close();
+                    }
                 ws.onopen = () => {
-                    //console.clear();
+                    console.clear();
                     console.log("Websocket connected.")
                     connecting = false;
                     connected = true;
@@ -66,6 +67,9 @@
                                 return;
                             } else if (data.type == "disconnection") {
                                 processDeviceDisconnection(data.name);
+                                return;
+                            } else if (data.type == "update") {
+                                updateCallbacks[data.name.join(".")](data.value)
                                 return;
                             } else {
                                 console.log(data);
@@ -160,7 +164,9 @@
                                             break;
                                     }
                                 }
-                                call(cmd + ")")
+                                call(cmd + ")").then((returnVal) => {
+                                    console.log(cmd+") => " + JSON.stringify(returnVal));
+                                })
                             })
                                 .value = "Call";
                             for (let k = 0; k < paramObjs.length; k++) {
@@ -199,29 +205,47 @@
                         const value = device.values[i];
                         addLabel(parent, parentName + device.name + "." + value.name + ": ");
                         let el = undefined;
+                        const callAndPrint = (parameters) => {
+                            const cmd = parentName + device.name + "." + value.name + ".set("+parameters+")";
+                            call(cmd).then((returnVal) => {
+                            console.log(cmd+" => " + JSON.stringify(returnVal));
+                        });
+                        }
                         switch (value.type) {
                             case "String":
                                 el = addInput(parent, "text", parentName + device.name + "." + value.name, (data) => {
-                                    call(parentName + device.name + "." + value.name + ".set(\"" + data + "\")");
+                                    callAndPrint("\"" + data + "\"");
                                 });
+                                updateCallbacks[parentName + device.name + "." + value.name] = (newValue) => {
+                                    el.value = newValue;
+                                };
                                 el.value = value.value;
                                 break;
                             case "Number":
                                 el = addInput(parent, "number", parentName + device.name + "." + value.name, (data) => {
-                                    call(parentName + device.name + "." + value.name + ".set(" + data + ")");
+                                    callAndPrint(data);
                                 });
+                                updateCallbacks[parentName + device.name + "." + value.name] = (newValue) => {
+                                    el.value = newValue;
+                                };
                                 el.value = value.value;
                                 break;
                             case "Bool":
                                 el = addInput(parent, "checkbox", parentName + device.name + "." + value.name, (data) => {
-                                    call(parentName + device.name + "." + value.name + ".set(" + (data ? "true" : "false") + ")");
+                                    callAndPrint((data ? "true" : "false"));
                                 });
+                                updateCallbacks[parentName + device.name + "." + value.name] = (newValue) => {
+                                    el.checked = newValue;
+                                };
                                 el.checked = value.value;
                                 break;
                             case "Color":
                                 el = addInput(parent, "color", parentName + device.name + "." + value.name, (data) => {
-                                    call(parentName + device.name + "." + value.name + ".set(\"" + data.toUpperCase() + "\")");
+                                    callAndPrint("\"" + data.toUpperCase() + "\"");
                                 });
+                                updateCallbacks[parentName + device.name + "." + value.name] = (newValue) => {
+                                    el.value = newValue.toLowerCase();
+                                };
                                 el.value = value.value.toLowerCase();
                                 break;
                             default:
@@ -235,8 +259,6 @@
                 }
             }
             async function processDeviceDisconnection(name) {
-                console.log(name);
-                console.log("document.getElementById(\"" + name + "\").remove()");
                 document.getElementById(name).remove();
                 numConnectedDevices--;
                 if (numConnectedDevices == 0) {
