@@ -1,0 +1,29 @@
+{
+    "name": "MOCS",
+    "short_name": "MOCS",
+    "icons":[
+        {
+            "src":"/favicon.png",
+            "sizes":"512x512",
+            "type":"image/png"
+        }
+    ],
+    "screenshots":[
+        {
+            "src":"/favicon.png",
+            "sizes":"512x512",
+            "type":"image/png",
+            "form_factor":"wide"
+        },
+        {
+            "src":"/favicon.png",
+            "sizes":"512x512",
+            "type":"image/png",
+            "form_factor":"narrow"
+        }
+    ],
+    "start_url": "/index",
+    "display": "fullscreen",
+    "theme_color": "#000000",
+    "background_color": "#000000"
+}

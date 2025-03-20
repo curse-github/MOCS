@@ -1,0 +1,29 @@
+div.device {
+    margin-left: 2em;
+    margin-top: 1em;
+    padding-left: 2em;
+    padding-right: 2em;
+    padding-bottom: 1em;
+    display: inline-block;
+    border-style: solid;
+    border-width: 1px;
+    border-color: darkgrey;
+    border-radius: 0.5em;
+}
+div.device div.deviceName{
+    display: flex;
+    justify-content: center;
+    font-weight: bold;
+}
+div.device input[type="checkbox"] {
+    vertical-align: middle;
+}
+div.device input[type="color"] {
+    display: inline-block;
+    width:2em;
+    height:2em;
+    border-style: solid;
+    border-width: 1px;
+    border-radius: 3px;
+    vertical-align: middle;
+}

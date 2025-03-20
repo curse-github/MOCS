@@ -1,7 +1,9 @@
 import { WebSocket, WebSocketServer, RawData } from "ws";// https://www.npmjs.com/package/ws
 import * as express from "express";// https://www.npmjs.com/package/express
 import { Application, Request, Response } from "express";// https://www.npmjs.com/package/@types/express
-import { readFileSync } from "fs";
+import { readFileSync, writeFileSync } from "fs";
+import * as webpush from "web-push";
+import * as http from "http";
 
 let config: {[sec: string]: {[key: string]: string}} = {};
 function readConfig(): void {
@@ -32,13 +34,108 @@ function generateUUID(): string {
         return (c === "x" ? b : ((b & 0x3) | 0x8)).toString(16);
     });
 }
+function sha256(ascii: any) {
+    function rightRotate(value: any, amount: any) {
+        return (value >>> amount) | (value << (32 - amount));
+    }
+    
+    var mathPow: any = Math.pow;
+    var maxWord: any = mathPow(2, 32);
+    var i: any;
+    var j: any; // Used as a counters across the whole file
+    var result: any = "";
+
+    var words: any = [];
+    var asciiBitLength: any = ascii.length * 8;
+    
+    //* caching results is optional - remove/add slash from front of this line to toggle
+    // Initial hash value: first 32 bits of the fractional parts of the square roots of the first 8 primes
+    // (we actually calculate the first 64, but extra values are just ignored)
+    var hash: any = [];
+    // Round constants: first 32 bits of the fractional parts of the cube roots of the first 64 primes
+    var k: any = [];
+    var primeCounter: any = k.length;
+    /* /
+    var hash = [], k = [];
+    var primeCounter = 0;
+    //*/
+
+    var isComposite: any = {};
+    for (var candidate = 2; primeCounter < 64; candidate++) {
+        if (!isComposite[candidate]) {
+            for (i = 0; i < 313; i += candidate) {
+                isComposite[i] = candidate;
+            }
+            hash[primeCounter] = (mathPow(candidate, 0.5) * maxWord) | 0;
+            k[primeCounter++] = (mathPow(candidate, 1 / 3) * maxWord) | 0;
+        }
+    }
+    
+    ascii += "\x80"; // Append Ƈ' bit (plus zero padding)
+    while ((ascii.length % 64) - 56) ascii += "\x00"; // More zero padding
+    for (i = 0; i < ascii.length; i++) {
+        j = ascii.charCodeAt(i);
+        if (j >> 8) return; // ASCII check: only accept characters in range 0-255
+        words[i >> 2] |= j << ((3 - i) % 4) * 8;
+    }
+    words[words.length] = ((asciiBitLength / maxWord) | 0);
+    words[words.length] = (asciiBitLength);
+    
+    // process each chunk
+    for (j = 0; j < words.length;) {
+        var w: any = words.slice(j, j += 16); // The message is expanded into 64 words as part of the iteration
+        var oldHash: any = hash;
+        // This is now the undefinedworking hash", often labelled as variables a...g
+        // (we have to truncate as well, otherwise extra entries at the end accumulate
+        hash = hash.slice(0, 8);
+        
+        for (i = 0; i < 64; i++) {
+            // Expand the message into 64 words
+            // Used below if
+            var w15: any = w[i - 15], w2 = w[i - 2];
+
+            // Iterate
+            var a: any = hash[0];
+            var e: any = hash[4];
+            var temp1: any = hash[7];
+            temp1 += (rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25)); // S1
+            temp1 += ((e & hash[5]) ^ ((~e) & hash[6])); // ch
+            temp1 += k[i];
+            // Expand the message schedule if needed
+            temp1 += (w[i] = (i < 16) ? w[i] : (
+                w[i - 16] + (rightRotate(w15, 7) ^ rightRotate(w15, 18) ^ (w15 >>> 3)) + w[i - 7] + (rightRotate(w2, 17) ^ rightRotate(w2, 19) ^ (w2 >>> 10)) // s0+s1
+            ) | 0);
+            // This is only used once, so *could* be moved below, but it only saves 4 bytes and makes things unreadble
+            var temp2: any = (rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22)); // S0
+            temp2 += ((a & hash[1]) ^ (a & hash[2]) ^ (hash[1] & hash[2])); // maj
+            
+            hash = [ (temp1 + temp2) | 0 ].concat(hash); // We don't bother trimming off the extra ones, they're harmless as long as we're truncating when we do the slice()
+            hash[4] = (hash[4] + temp1) | 0;
+        }
+        
+        for (i = 0; i < 8; i++) {
+            hash[i] = (hash[i] + oldHash[i]) | 0;
+        }
+    }
+    
+    for (i = 0; i < 8; i++) {
+        for (j = 3; j + 1; j--) {
+            var b: any = (hash[i] >> (j * 8)) & 255;
+            result += ((b < 16) ? 0 : "") + b.toString(16);
+        }
+    }
+    return result;
+}
+
 class ExpressWrapper {
     private app: Application;
     private port: number;
-    constructor(_port: number = 80) {
+    public server: http.Server;
+    constructor(_port: number) {
         this.port = _port;
         this.app = express();
         this.app.use(express.json());
+        this.server = http.createServer(this.app);
     }
     use(path: string, callback: (req: Request, res: Response)=> void): void {
         this.app.use(path, callback);
@@ -54,15 +151,17 @@ class ExpressWrapper {
             this.get("*", (req: Request, res: Response) => {
                 res.status(404).send("<html><body>404 Page Not Found</body></html>");
             });
-            const server: any = this.app.listen(this.port, function() {
+            this.server.listen(this.port, function() {
                 resolve();
             });
         });
     }
 }
+export function getCookies(req: Request): { [key: string]: string } {
+    return ((req.headers.cookie == undefined) ? {} : (Object.fromEntries(req.headers.cookie!.split(";").map((el) => (el.trim().split("=").map(decodeURIComponent))))));
+}
 
-class WebsocketWrapper {
-    private port: number;
+class WebsocketServerWrapper {
     private wss: WebSocketServer;
     private onConnection: ((connectionKey: string)=> void)|undefined = undefined;
     private onClose: ((connectionKey: string)=> void)|undefined = undefined;
@@ -73,10 +172,10 @@ class WebsocketWrapper {
     private connections: WebSocket[] = [];
     private connectionKeys: string[] = [];
     private connectionIndexByKey: {[key: string]: number} = {};
-    constructor(_port: number = 8080) {
-        this.port = _port;
+    constructor(server: any, path: string) {
         this.wss = new WebSocketServer({
-            port: this.port,
+            server,
+            path: "/" + path,
             perMessageDeflate: {
                 // Other options settable:
                 clientNoContextTakeover: true, // Defaults to negotiated value.
@@ -91,21 +190,21 @@ class WebsocketWrapper {
     }
 
     // #region set callbacks
-    setOnConnection(callback: (this: WebsocketWrapper, connectionKey: string)=> void): void {
+    setOnConnection(callback: (this: WebsocketServerWrapper, connectionKey: string)=> void): void {
         this.onConnection = callback.bind(this);
     }
-    setOnClose(callback: (this: WebsocketWrapper, connectionKey: string)=> void): void {
+    setOnClose(callback: (this: WebsocketServerWrapper, connectionKey: string)=> void): void {
         this.onClose = callback.bind(this);
     }
-    setOnMessage(callback: (this: WebsocketWrapper, connectionKey: string, data: RawData)=> void): void {
+    setOnMessage(callback: (this: WebsocketServerWrapper, connectionKey: string, data: RawData)=> void): void {
         this.msgMode = "Str";
         this.onMessage = callback.bind(this);
     }
-    setOnStringMessage(callback: (this: WebsocketWrapper, connectionKey: string, data: string)=> void): void {
+    setOnStringMessage(callback: (this: WebsocketServerWrapper, connectionKey: string, data: string)=> void): void {
         this.msgMode = "Msg";
         this.onString = callback.bind(this);
     }
-    setOnJsonMessage(callback: (this: WebsocketWrapper, connectionKey: string, data: any)=> void): void {
+    setOnJsonMessage(callback: (this: WebsocketServerWrapper, connectionKey: string, data: any)=> void): void {
         this.msgMode = "Json";
         this.onJson = callback.bind(this);
     }
@@ -267,6 +366,23 @@ type deviceType = {
     functions?: functionType[],
     values?: valueType[],
     children?: deviceType[]
+};
+
+type notifSubType = {
+    type: "webpush",
+    endpoint: string,
+    keys: {
+        auth: string,
+        p256dh: string
+    }
+};
+type userType = {
+    name: string,
+    email: string,
+    pass_hash: string,
+    isAdmin: boolean,
+    deviceAccess: string[],
+    notifSub: notifSubType
 };
 // #endregion types
 
@@ -472,23 +588,116 @@ function verifyDevice(device: deviceType): [ boolean, string ] {
 }
 // #endregion type validation functions
 
-const users = [
-    {
-        name: "user",
-        isAdmin: true,
-        deviceAccess: [ "" ]
-    }
-];
-const userIndexByName: {[name: string]: number} = { user: 0 };
+const dbFilePath: string = __dirname + "/database.json";
 
+const db: any = JSON.parse(readFileSync(dbFilePath).toString() || "{}");
+const users: userType[] = db.users || [];
+const userIndexByName: {[name: string]: number} = {};
+const userIndexByEmail: {[email: string]: number} = {};
+for (let i = 0; i < users.length; i++) {
+    const user = users[i];
+    userIndexByName[user.name] = i;
+    userIndexByEmail[user.email] = i;
+}
+const publicKey: string = readFileSync("public-key.txt").toString();
+const privateKey: string = readFileSync("private-key.txt").toString();
+
+webpush.setVapidDetails("mailto:curse@simpsoncentral.com", publicKey, privateKey);
+function notifyUser(username: string, header: string, body: string, important: boolean) {
+    const index: number|undefined = userIndexByName[username.toLowerCase()];
+    if (index == undefined) { console.log("User not found."); return; }
+    const user: userType = users[index];
+    if (user == undefined) { console.log("User not found."); return; }
+    if (user.notifSub == undefined) { console.log("User has not subbed to notifications."); return; }
+    webpush.sendNotification(user.notifSub, JSON.stringify({ header, body, important }))
+        .then((res: any) => {
+            console.log(res);
+        })
+        .catch((error: any) => {
+            console.log("Notification push to user \"" + username + "\" failed.", error);
+        });
+}
+
+function assert(condition: boolean): asserts condition { // Asserts that "condition" is true
+    if (!condition) throw new Error("condition not met");
+    return;
+}
+function assertExists<T>(value?: T): asserts value { // Asserts that "condition" is true
+    if (!value) throw new Error("value is undefined");
+    return;
+}
 class ConnectionHandler {
-    private wbsckt: WebsocketWrapper;
+    private wbsckt: WebsocketServerWrapper;
     private exprs: ExpressWrapper;
     private websocketConnectionKeys: string[] = [];
     private websocketWsLastPingTime: {[key: string]: number} = {};
 
     private devices: deviceType[] = [];
     private deviceNameToIndex: {[name: string]: number} = {};
+    private localDevices: deviceType[] = [
+        {
+            name: "userNotif",
+            functions: [
+                {
+                    name: "notify",
+                    overloads: [
+                        {
+                            visible: true,
+                            parameters: [
+                                {
+                                    type: "String",
+                                    defaultValue: "curse"
+                                },
+                                {
+                                    type: "String",
+                                    defaultValue: "header"
+                                },
+                                {
+                                    type: "String",
+                                    defaultValue: "body"
+                                }
+                            ],
+                            returnType: "None"
+                        }
+                    ]
+                },
+                {
+                    name: "notifyImportant",
+                    overloads: [
+                        {
+                            visible: true,
+                            parameters: [
+                                {
+                                    type: "String",
+                                    defaultValue: "curse"
+                                },
+                                {
+                                    type: "String",
+                                    defaultValue: "header"
+                                },
+                                {
+                                    type: "String",
+                                    defaultValue: "body"
+                                }
+                            ],
+                            returnType: "None"
+                        }
+                    ]
+                }
+            ]
+        }
+    ];
+    private localDeviceNameToIndex: {[name: string]: number} = {};
+    private localDeviceCallbackMap: {[sig: string]: (...params: any[])=> any} = {
+        "userNotif.notify": ([ user, header, body ]: any[]) => {
+            notifyUser(user as string, header as string, body as string, false);
+            return;
+        },
+        "userNotif.notifyImportant": ([ user, header, body ]: any[]) => {
+            notifyUser(user as string, header as string, body as string, true);
+            return;
+        }
+    };
 
     private deviceWsConnectionKey: (string|undefined)[] = [];
     private wsReturnResolves: {[key: string]: [string, (val: any)=> void]} = {};
@@ -498,8 +707,18 @@ class ConnectionHandler {
     private deviceHttpLastPingTime: {[id: string]: number} = {};
     private httpCmdQueue: {[id: string]: any[]} = {};
     private httpReturnResolveLists: {[id: string]: ((val: any)=> void)[]} = {};
-    constructor(websocketPort: number, httpPort: number) {
-        this.wbsckt = new WebsocketWrapper(websocketPort);
+
+    SESSION_LENGTH = 48 * 60 * 60 * 1000;// 48 hours
+    private sessionIds: string[] = [];
+    private sessionTimeouts: number[] = [];
+    private sessionIdToUserName: { [id: string]: string } = {};
+    constructor(port: number) {
+        for (let i = 0; i < this.localDevices.length; i++)
+            this.localDeviceNameToIndex[this.localDevices[i].name] = i;
+
+        this.exprs = new ExpressWrapper(port);
+        this.wbsckt = new WebsocketServerWrapper(this.exprs.server, "ws");
+
         this.wbsckt.setOnConnection((function(this: ConnectionHandler, connectionKey: string) {
             for (let i = 0; i <= this.websocketConnectionKeys.length; i++) {
                 if (this.websocketConnectionKeys[i] == undefined) {
@@ -528,8 +747,14 @@ class ConnectionHandler {
                 });
                 
                 for (let i = 0; i < this.deviceWsSubscriptions.length; i++) {
-                    const [ user, key ]: [ any, string ] = this.deviceWsSubscriptions[i];
+                    const [ userIndex, key ]: [ any, string ] = this.deviceWsSubscriptions[i];
+                    const user: any = users[userIndex];
                     if (user.isAdmin) {
+                        this.wbsckt.send(key, JSON.stringify({
+                            type: "disconnection",
+                            name
+                        }));
+                    } else if (user.deviceAccess.includes(name)) {
                         this.wbsckt.send(key, JSON.stringify({
                             type: "disconnection",
                             name
@@ -567,8 +792,14 @@ class ConnectionHandler {
                 this.deviceHttpConnectionIds[index] = undefined;
 
                 for (let i = 0; i < this.deviceWsSubscriptions.length; i++) {
-                    const [ user, key ]: [ any, string ] = this.deviceWsSubscriptions[i];
+                    const [ userIndex, key ]: [ any, string ] = this.deviceWsSubscriptions[i];
+                    const user: any = users[userIndex];
                     if (user.isAdmin) {
+                        this.wbsckt.send(key, JSON.stringify({
+                            type: "connection",
+                            devices: [ data.device ]
+                        }));
+                    } else if (user.deviceAccess.includes(data.device.name)) {
                         this.wbsckt.send(key, JSON.stringify({
                             type: "connection",
                             devices: [ data.device ]
@@ -604,8 +835,15 @@ class ConnectionHandler {
 
                 // call function on subscribers
                 for (let i = 0; i < this.deviceWsSubscriptions.length; i++) {
-                    const [ user, key ]: [ any, string ] = this.deviceWsSubscriptions[i];
+                    const [ userIndex, key ]: [ any, string ] = this.deviceWsSubscriptions[i];
+                    const user: any = users[userIndex];
                     if (user.isAdmin) {
+                        this.wbsckt.send(key, JSON.stringify({
+                            type: "update",
+                            name: [ ...device.name.split("."), value.name ],
+                            value: validParamValue
+                        }));
+                    } else if (user.deviceAccess.includes(data.device.name)) {
                         this.wbsckt.send(key, JSON.stringify({
                             type: "update",
                             name: [ ...device.name.split("."), value.name ],
@@ -615,27 +853,46 @@ class ConnectionHandler {
                 }
                 return;
             } else if (data.type === "subscribe") {
-                if ((data.user == undefined) || (data.pass == undefined)) return;
-                if ((data.user === "") || (data.pass === "")) return;
-                if (userIndexByName[data.user] == undefined) return;
-                const userIndex = userIndexByName[data.user];
-                const user = users[userIndex];
+                if (
+                    (data.user == undefined) || (data.pass == undefined) || (data.user === "") || (data.pass === "")
+                    || (userIndexByName[data.user] == undefined)
+                ) {
+                    this.wbsckt.send(connectionKey, JSON.stringify({ type: "logout" }));
+                    return;
+                }
+                const userIndex: number|undefined = userIndexByName[data.user];
+                if (userIndex == undefined) {
+                    this.wbsckt.send(connectionKey, JSON.stringify({ type: "logout" }));
+                    return;
+                }
                 let index: number = -1;
                 for (let i = 0; i <= this.deviceWsSubscriptions.length; i++) {
                     if (this.deviceWsSubscriptions[i] == undefined) { index = i; break; }
                 }
-                this.deviceWsSubscriptions[index] = [ user, connectionKey ];
+                this.deviceWsSubscriptions[index] = [ userIndex, connectionKey ];
 
-                if (user.isAdmin && (this.devices.length > 0)) {
+                const user = users[userIndex];
+                if (user.isAdmin && ((this.devices.length > 0) || (this.localDevices.length > 0))) {
                     this.wbsckt.send(connectionKey, JSON.stringify({
                         type: "connection",
-                        devices: this.devices
+                        devices: [ ...this.devices, ...this.localDevices ]
+                    }));
+                } else {
+                    let tmpDevices: deviceType[] = [];
+                    for (let i = 0; i < this.devices.length; i++)
+                        if (user.deviceAccess.includes(this.devices[i].name))
+                            tmpDevices.push(this.devices[i]);
+                    for (let i = 0; i < this.localDevices.length; i++)
+                        if (user.deviceAccess.includes(this.localDevices[i].name))
+                            tmpDevices.push(this.localDevices[i]);
+                    this.wbsckt.send(connectionKey, JSON.stringify({
+                        type: "connection",
+                        devices: tmpDevices
                     }));
                 }
             }
         }).bind(this));
 
-        this.exprs = new ExpressWrapper(httpPort);
         this.exprs.post("/connect", (function(this: ConnectionHandler, req: Request, res: Response) {
             let [ verified, reason ] = verifyDevice(req.body);
             if (!verified) { // invalid device object
@@ -684,8 +941,14 @@ class ConnectionHandler {
                 res.status(404).send("<html><body>404 Page Not Found</body></html>");
 
             for (let i = 0; i < this.deviceWsSubscriptions.length; i++) {
-                const [ user, key ]: [ any, string ] = this.deviceWsSubscriptions[i];
+                const [ userIndex, key ]: [ any, string ] = this.deviceWsSubscriptions[i];
+                const user: any = users[userIndex];
                 if (user.isAdmin) {
+                    this.wbsckt.send(key, JSON.stringify({
+                        type: "connection",
+                        devices: [ req.body ]
+                    }));
+                } else if (user.deviceAccess.includes(req.body.name)) {
                     this.wbsckt.send(key, JSON.stringify({
                         type: "connection",
                         devices: [ req.body ]
@@ -761,12 +1024,6 @@ class ConnectionHandler {
                 }
             }
         }).bind(this));
-        this.exprs.get("/getDevices", (function(this: ConnectionHandler, req: Request, res: Response) {
-            if (req.headers.accept === "application/json")// client requested json
-                res.status(200).json(this.devices);
-            else
-                res.status(404).send("<html><body>404 Page Not Found</body></html>");
-        }).bind(this));
         this.exprs.post("/updateValue", (function(this: ConnectionHandler, req: Request, res: Response) {
             if (this.deviceHttpLastPingTime[req.body.id] == undefined) {
                 if (req.headers.accept === "application/json")// client requested json
@@ -821,8 +1078,15 @@ class ConnectionHandler {
             this.setValueOnDevice([ device.name ], req.body.name, validParamValue);
             // call function on subscribers
             for (let i = 0; i < this.deviceWsSubscriptions.length; i++) {
-                const [ user, key ]: [ any, string ] = this.deviceWsSubscriptions[i];
+                const [ userIndex, key ]: [ any, string ] = this.deviceWsSubscriptions[i];
+                const user: any = users[userIndex];
                 if (user.isAdmin) {
+                    this.wbsckt.send(key, JSON.stringify({
+                        type: "update",
+                        name: [ ...device.name.split("."), value.name ],
+                        value: validParamValue
+                    }));
+                } else if (user.deviceAccess.includes(device.name)) {
                     this.wbsckt.send(key, JSON.stringify({
                         type: "update",
                         name: [ ...device.name.split("."), value.name ],
@@ -839,10 +1103,131 @@ class ConnectionHandler {
                 res.status(404).send("<html><body>404 Page Not Found</body></html>");
             return;
         }).bind(this));
-        this.exprs.use("/", express.static("webpage/") as unknown as ((req: Request, res: Response)=> void));
+        this.exprs.get("/login", (function(this: ConnectionHandler, req: Request, res: Response) {
+            // if it has a session, clear it
+            const cookies = getCookies(req);
+            if (cookies.sessionid != undefined)
+                res.clearCookie("sessionid");
+            res.sendFile(__dirname + "/webpage/login.html", (err: Error) => {
+                if (err == undefined) return;
+                console.log("Couldnt find login.html page.", "\"" + err.name + "\": " + err.message);
+                res.status(500).type("text").send("error 500, internal error");
+            });
+        }).bind(this));
+        this.exprs.get("/tryLogin", (async function(this: ConnectionHandler, req: Request, res: Response) {
+            const query: { [key: string]: (string|string[]|undefined) } = req.query as { [key: string]: (string|string[]|undefined) };
+            if ((query.email == "") || (query.password == "")) { res.json(false); return; }
+            const email: string = query.email as string;
+            const pass_hash: string = query.password as string;
+            const index: number|undefined = userIndexByEmail[email.toLowerCase()];
+            if (index == undefined) { res.json(false); return; }
+            const user: any = users[index];
+            if ((user == undefined) || (user.pass_hash != pass_hash)) { res.json(false); return; }
+            // it is a valid login
+            // create a session
+            const sessionId = generateUUID();
+            let sessionIndex: number = -1;
+            for (let i = 0; i <= this.sessionIds.length; i++) {
+                if (this.sessionIds[i] == undefined) { sessionIndex = i; break; }
+            }
+            this.sessionIds[sessionIndex] = sessionId;
+            this.sessionTimeouts[sessionIndex] = (new Date()).getTime() + this.SESSION_LENGTH;
+            this.sessionIdToUserName[sessionId] = user.name;
+            // set their session id
+            res.cookie("sessionid", sessionId, { maxAge: this.SESSION_LENGTH, httpOnly: false });
+            res.cookie("name", user.name);
+            res.json(true);
+            // console.log("User \"" + user.name + "\" logged in.");
+        }).bind(this));
+
+        const serveAuthenticated = (path: string, filePath: string) => {
+            this.exprs.get(path, (async function(this: ConnectionHandler, req: Request, res: Response) {
+                const cookies: any = getCookies(req);
+                if (cookies.sessionid == undefined) { res.redirect("/login"); return; }
+                const time = (new Date()).getTime();
+                for (let i = 0; i < this.sessionIds.length; i++) {
+                    if (this.sessionIds[i] == undefined) continue;
+                    const sessionId: string = this.sessionIds[i];
+                    if ((time - this.sessionTimeouts[i]) >= 0) {
+                        delete this.sessionIds[i];
+                        delete this.sessionTimeouts[i];
+                        delete this.sessionIdToUserName[sessionId];
+                    }
+                }
+                if (this.sessionIdToUserName[cookies.sessionid] == undefined) { res.redirect("/login"); return; }
+                res.sendFile(__dirname + filePath, (err: Error) => {
+                    if (err == undefined) return;
+                    console.log("Couldnt find " + path + " file.", "\"" + err.name + "\": " + err.message);
+                    res.status(500).type("text").send("error 500, internal error");
+                });
+            }).bind(this));
+        };
+        const serveStatic = (path: string, filePath: string) => {
+            this.exprs.get(path, (async function(this: ConnectionHandler, req: Request, res: Response) {
+                res.sendFile(__dirname + filePath, (err: Error) => {
+                    if (err == undefined) return;
+                    console.log("Couldnt find " + path + " file.", "\"" + err.name + "\": " + err.message);
+                    res.status(500).type("text").send("error 500, internal error");
+                });
+            }).bind(this));
+        };
+        serveAuthenticated("/index", "/webpage/index.html");
+        serveAuthenticated("/index.css", "/webpage/index.css");
+        serveAuthenticated("/lib.js", "/webpage/lib.js");
+        serveAuthenticated("/index.js", "/webpage/index.js");
+        serveAuthenticated("/notifications.js", "/webpage/notifications.js");
+        serveAuthenticated("/sw.js", "/webpage/sw.js");
+        serveStatic("/manifest.json", "/webpage/manifest.json");
+        serveStatic("/favicon.ico", "/webpage/favicon.ico");
+        serveStatic("/favicon.png", "/webpage/favicon.png");
+        
+        this.exprs.post("/notif/subscribe", (async function(this: ConnectionHandler, req: Request, res: Response) {
+            const cookies: any = getCookies(req);
+            if (cookies.sessionid == undefined) { res.redirect("/login"); return; }
+            const time = (new Date()).getTime();
+            for (let i = 0; i < this.sessionIds.length; i++) {
+                if (this.sessionIds[i] == undefined) continue;
+                const sessionId: string = this.sessionIds[i];
+                if ((time - this.sessionTimeouts[i]) >= 0) {
+                    delete this.sessionIds[i];
+                    delete this.sessionTimeouts[i];
+                    delete this.sessionIdToUserName[sessionId];
+                }
+            }
+            if (this.sessionIdToUserName[cookies.sessionid] == undefined) { res.redirect("/login"); return; }
+            const username: string = this.sessionIdToUserName[cookies.sessionid];
+            const { endpoint, keys } = req.body;
+            users[userIndexByName[username]].notifSub = {
+                type: "webpush",
+                endpoint: (endpoint as string),
+                keys: (keys as { auth: string, p256dh: string })
+            };
+            writeFileSync(dbFilePath, JSON.stringify({ users }, undefined, "    "));
+        }).bind(this));
+        this.exprs.get("/", (req: Request, res: Response) => { res.redirect("/index"); });
     }
 
-    getFunctionParamsOnDevice(devicePath: string[], funcName: string): ({ visible: boolean, parameters: parameterType[], returnType: "String"|"Number"|"Bool"|"Color"|"None" }[])|undefined {
+    getFunctionOverloadsOnDevice(devicePath: string[], funcName: string): ["None"|"Local"|"Remote", ({ visible: boolean, parameters: parameterType[], returnType: "String"|"Number"|"Bool"|"Color"|"None" }[])|undefined] {
+        if (devicePath.length == 1) {
+            let foundDevice: deviceType|undefined = undefined;
+            const nextDeviceName = devicePath[0];
+            for (let i = 0; i < this.localDevices.length; i++) {
+                if (this.localDevices[i] == undefined) continue;
+                const device: deviceType = this.localDevices[i];
+                if (device.name === nextDeviceName)
+                    foundDevice = device;
+            }
+            if (foundDevice != undefined) {
+                const funcs: functionType[] = foundDevice.functions || [];
+                // find function
+                for (let j = 0; j < funcs.length; j++) {
+                    const func: functionType = funcs[j];
+                    if (func.name === funcName) {
+                        return [ "Remote", func.overloads ];
+                    }
+                }
+            }
+        }
         let currDeviceList: deviceType[] = this.devices;
         for (let i = 0; i < devicePath.length - 1; i++) {
             const nextDeviceName = devicePath[i];
@@ -855,7 +1240,7 @@ class ConnectionHandler {
                     found = true;
                 }
             }
-            if (!found) return undefined;
+            if (!found) return [ "None", undefined ];
         }
         let foundDevice: deviceType|undefined = undefined;
         const nextDeviceName = devicePath[devicePath.length - 1];
@@ -865,15 +1250,15 @@ class ConnectionHandler {
             if (device.name === nextDeviceName)
                 foundDevice = device;
         }
-        if (foundDevice == undefined) return undefined;
+        if (foundDevice == undefined) return [ "None", undefined ];
         const funcs: functionType[] = foundDevice.functions || [];
         // find function
         for (let j = 0; j < funcs.length; j++) {
             const func: functionType = funcs[j];
             if (func.name === funcName)
-                return func.overloads;
+                return [ "Remote", func.overloads ];
         }
-        return undefined;
+        return [ "None", undefined ];
     }
     getValueObjOnDevice(devicePath: string[], valueName: string): valueType|undefined {
         let currDeviceList: deviceType[] = this.devices;
@@ -942,9 +1327,6 @@ class ConnectionHandler {
     async handleCallCmd({ type, cmd }: {type: "call", cmd: string }): Promise<any> {
         // cmd must have form "device.function(param)" or "device.function()"
         if ((typeof cmd) !== "string") { console.error("Command is not of type string."); return "None"; }
-        if (cmd.toLowerCase().trim() === "getdevices()") {
-            return JSON.stringify(this.devices);
-        }
         const splt1: string[] = cmd.split("(");
         // must have something on both sides of a '(', and nothing after the ')'
         if (splt1.length != 2) { console.error("Command is invalid format."); return "None"; }
@@ -956,8 +1338,9 @@ class ConnectionHandler {
         // must have at least a single device and function name
         const callSig: string[] = callSigStr.split(".");
         if (callSig.length < 2) { console.error("Command is invalid format."); return "None"; }
-        const deviceIndex: number = this.deviceNameToIndex[callSig[0]];// the index of the device
-        if (deviceIndex == undefined) { console.error("Command attempted to call function on non-existant device."); return "None"; }
+        const remoteDeviceIndex: number = this.deviceNameToIndex[callSig[0]];// the index of the device
+        const localDeviceIndex: number = this.localDeviceNameToIndex[callSig[0]];// the index of the device
+        if ((remoteDeviceIndex == undefined) && (localDeviceIndex == undefined)) { console.error("Command attempted to call function on non-existant device."); return "None"; }
         // get overloads of the function, or undefined if it does not exist
         const funcName: string = callSig.pop()!;
         if (funcName === "get") {
@@ -969,8 +1352,9 @@ class ConnectionHandler {
             const value: string = callSig.pop()!;
             return await this.handleGetSetCmd(callSig, value, "set", paramsStr2.split(","));
         }
-        const overloads: { visible: boolean, parameters: parameterType[], returnType: "String"|"Number"|"Bool"|"Color"|"None" }[]|undefined = this.getFunctionParamsOnDevice(callSig, funcName);
-        if (overloads == undefined) { console.error("Command attempted to call non-existant function."); return "None"; }
+        const [ functionType, overloads ]: ["None"|"Remote"|"Local", ({ visible: boolean, parameters: parameterType[], returnType: "String"|"Number"|"Bool"|"Color"|"None" }[])|undefined] = this.getFunctionOverloadsOnDevice(callSig, funcName);
+        if (functionType === "None") { console.error("Command attempted to call non-existant function."); return "None"; }
+        assertExists(overloads);
         // check each overload if it is valid for the given parameters
         const params: string[] = paramsStr2.split(",");
         let finalParams: any[] = [];
@@ -984,36 +1368,42 @@ class ConnectionHandler {
                 if (!paramValid) paramsValid = false;
             }
             if (paramsValid) {
-                const key: string|undefined = this.deviceWsConnectionKey[deviceIndex];
-                const id: string|undefined = this.deviceHttpConnectionIds[deviceIndex];
                 let returnVal: any = "None";
-                if (key != undefined) {
-                    // send data to websocket connection and await response
-                    const returnId: string = generateUUID();
-                    this.wbsckt.sendJson(key, {
-                        type: "call",
-                        device: callSig.slice(1),
-                        func: funcName,
-                        overload: i,
-                        parameters: finalParams,
-                        returnId
-                    });
-                    returnVal = await new Promise<any>((function(this: ConnectionHandler, resolve: (val: any)=> void) {
-                        this.wsReturnResolves[returnId] = [ key, resolve ];
-                    }).bind(this));
-                } else if (id != undefined) {
-                    // send data to http queue and await response
-                    this.httpCmdQueue[id].push({
-                        type: "call",
-                        device: callSig.slice(1),
-                        func: funcName,
-                        overload: i,
-                        parameters: finalParams
-                    });
-                    returnVal = await new Promise<any>((function(this: ConnectionHandler, resolve: (val: any)=> void) {
-                        this.httpReturnResolveLists[id] ||= [];
-                        this.httpReturnResolveLists[id].push(resolve);
-                    }).bind(this));
+                if (functionType == "Remote") {
+                    const func: ((...params: any[])=> void) = this.localDeviceCallbackMap[[ ...callSig, funcName ].join(".")];
+                    if (func == undefined) { console.error("Server error, callback for local function missing."); return "None"; }
+                    returnVal = func(finalParams);
+                } else {
+                    const key: string|undefined = this.deviceWsConnectionKey[remoteDeviceIndex];
+                    const id: string|undefined = this.deviceHttpConnectionIds[remoteDeviceIndex];
+                    if (key != undefined) {
+                        // send data to websocket connection and await response
+                        const returnId: string = generateUUID();
+                        this.wbsckt.sendJson(key, {
+                            type: "call",
+                            device: callSig.slice(1),
+                            func: funcName,
+                            overload: i,
+                            parameters: finalParams,
+                            returnId
+                        });
+                        returnVal = await new Promise<any>((function(this: ConnectionHandler, resolve: (val: any)=> void) {
+                            this.wsReturnResolves[returnId] = [ key, resolve ];
+                        }).bind(this));
+                    } else if (id != undefined) {
+                        // send data to http queue and await response
+                        this.httpCmdQueue[id].push({
+                            type: "call",
+                            device: callSig.slice(1),
+                            func: funcName,
+                            overload: i,
+                            parameters: finalParams
+                        });
+                        returnVal = await new Promise<any>((function(this: ConnectionHandler, resolve: (val: any)=> void) {
+                            this.httpReturnResolveLists[id] ||= [];
+                            this.httpReturnResolveLists[id].push(resolve);
+                        }).bind(this));
+                    }
                 }
                 // forward response back to sender
                 const [ isValid, validValue ]: [boolean, string] = verifyReturnOfType(returnVal, overloads[i].returnType);
@@ -1081,63 +1471,70 @@ class ConnectionHandler {
         }
     }
     start() {
-        Promise.all([ this.wbsckt.start(), this.exprs.start() ]).then(() => {
-            const intervalTime: number = 5000;
-            setInterval(() => {
-                this.wbsckt.sendJsonAll({ type: "ping" });
-                setTimeout(() => {
-                    const currTime: number = (new Date()).getTime();
-                    for (let i: number = 0; i < this.websocketConnectionKeys.length; i++) {
-                        if (this.websocketConnectionKeys[i] == undefined) continue;
-                        const key: string = this.websocketConnectionKeys[i];
-                        if ((currTime - this.websocketWsLastPingTime[key]) > intervalTime) {
-                            // close connection and clear related data
-                            this.wbsckt.closeConnection(key);
+        this.exprs.start().then(async () => {
+            this.wbsckt.start().then(() => {
+                const intervalTime: number = 5000;
+                setInterval(() => {
+                    this.wbsckt.sendJsonAll({ type: "ping" });
+                    setTimeout(() => {
+                        const currTime: number = (new Date()).getTime();
+                        for (let i: number = 0; i < this.websocketConnectionKeys.length; i++) {
+                            if (this.websocketConnectionKeys[i] == undefined) continue;
+                            const key: string = this.websocketConnectionKeys[i];
+                            if ((currTime - this.websocketWsLastPingTime[key]) > intervalTime) {
+                                // close connection and clear related data
+                                this.wbsckt.closeConnection(key);
+                            }
                         }
-                    }
-                }, 1500);
-                for (let i: number = 0; i < this.deviceHttpConnectionIds.length; i++) {
-                    if (this.deviceHttpConnectionIds[i] == undefined) continue;
-                    const id: string = this.deviceHttpConnectionIds[i] as string;
-                    if (
-                        ((new Date()).getTime() - this.deviceHttpLastPingTime[id]!) > intervalTime
-                    ) {
-                        const name: string = this.devices[i].name;
-                        console.log("Device \"" + name + "\" disconnected.");
-                        delete this.devices[i];
-                        delete this.deviceNameToIndex[name];
-                        delete this.deviceWsConnectionKey[i];
-                        delete this.deviceHttpConnectionIds[i];
-                        delete this.deviceHttpLastPingTime[id];
-                        delete this.httpCmdQueue[id];
-                        const returnResolveList: ((val: any)=> void)[] = this.httpReturnResolveLists[id];
-                        for (let i = 0; i < returnResolveList.length; i++)
-                            returnResolveList[i]("None");
-                        delete this.httpReturnResolveLists[id];
-                        
-                        for (let i = 0; i < this.deviceWsSubscriptions.length; i++) {
-                            const [ user, key ]: [ any, string ] = this.deviceWsSubscriptions[i];
-                            if (user.isAdmin) {
-                                this.wbsckt.send(key, JSON.stringify({
-                                    type: "disconnection",
-                                    name
-                                }));
+                    }, 1500);
+                    for (let i: number = 0; i < this.deviceHttpConnectionIds.length; i++) {
+                        if (this.deviceHttpConnectionIds[i] == undefined) continue;
+                        const id: string = this.deviceHttpConnectionIds[i] as string;
+                        if (
+                            ((new Date()).getTime() - this.deviceHttpLastPingTime[id]!) > intervalTime
+                        ) {
+                            const name: string = this.devices[i].name;
+                            console.log("Device \"" + name + "\" disconnected.");
+                            delete this.devices[i];
+                            delete this.deviceNameToIndex[name];
+                            delete this.deviceWsConnectionKey[i];
+                            delete this.deviceHttpConnectionIds[i];
+                            delete this.deviceHttpLastPingTime[id];
+                            delete this.httpCmdQueue[id];
+                            const returnResolveList: ((val: any)=> void)[] = this.httpReturnResolveLists[id];
+                            for (let i = 0; i < returnResolveList.length; i++)
+                                returnResolveList[i]("None");
+                            delete this.httpReturnResolveLists[id];
+                            
+                            for (let i = 0; i < this.deviceWsSubscriptions.length; i++) {
+                                const [ userIndex, key ]: [ any, string ] = this.deviceWsSubscriptions[i];
+                                const user: any = users[userIndex];
+                                if (user.isAdmin) {
+                                    this.wbsckt.send(key, JSON.stringify({
+                                        type: "disconnection",
+                                        name
+                                    }));
+                                } else if (user.deviceAccess.includes(name)) {
+                                    this.wbsckt.send(key, JSON.stringify({
+                                        type: "disconnection",
+                                        name
+                                    }));
+                                }
                             }
                         }
                     }
-                }
-            }, intervalTime);
-            console.clear();
-            console.log("Server started.");
-            console.log("Websocket server on mocs.campbellsimpson.com:" + websocketPort + ".");
-            console.log("Https server on mocs.campbellsimpson.com:" + httpPort + ".");
+                }, intervalTime);
+                console.clear();
+                console.log("Server started.");
+                console.log("Websocket server on wss://mocs.campbellsimpson.com/ws.");
+                console.log("Https server on https://mocs.campbellsimpson.com.");
+            });
         });
     }
 }
 
 // create and start server
 readConfig();
-const websocketPort: number = Number(config.Ports.ws);
-const httpPort: number = Number(config.Ports.http);
-const server: ConnectionHandler = new ConnectionHandler(websocketPort, httpPort);
+const port: number = Number(config.sec.port);
+const server: ConnectionHandler = new ConnectionHandler(port);
 server.start();

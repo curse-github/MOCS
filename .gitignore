@@ -1,1 +1,5 @@
+/.vscode
 /node_modules
+database.json
+private-key.txt
+/python-test

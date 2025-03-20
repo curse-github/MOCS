@@ -18,7 +18,7 @@ class WsClient extends ClientBase {
     private returnValueResolves: {[returnId: string]: (val: any)=> void} = {};
     protected open(): void {
         // initialize websocket and set callbacks
-        this.ws = new WebSocket("ws://localhost:8080");
+        this.ws = new WebSocket("wss://mocs.campbellsimpson.com/ws");
         this.ws.on("error", (function(this: WsClient, err: any) {
             if (err.code != "ECONNREFUSED")
                 console.log("Connection error:", err);
@@ -107,11 +107,9 @@ client.addFunction("func5", [ "Color" ], [ ], "None", (col: string) => {
 });
 client.addValue("val1", "String", "", (val: string) => {
     console.log("val1 = \"" + val + "\"");
-    client.updateValue("val1", val + "-");
 });
 client.addValue("val2", "Number", 0, (val: number) => {
     console.log("val2 = " + val);
-    client.updateValue("val2", val + 1);
 });
 let lastVal3 = false;
 client.addValue("val3", "Bool", false, (val: boolean) => {
@@ -120,7 +118,6 @@ client.addValue("val3", "Bool", false, (val: boolean) => {
 });
 client.addValue("val4", "Color", "#000000", (val: string) => {
     console.log("val4 = \"" + val + "\"");
-    client.updateValue("val4", val.substring(0, 6) + "0");
 });
 client.start();
 client.setOnConnect(async () => {

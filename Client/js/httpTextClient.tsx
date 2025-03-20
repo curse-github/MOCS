@@ -29,13 +29,13 @@ class HttpTextClient extends ClientBase {
         this.onClose();
     }
     protected async sendCmd(cmd: string): Promise<any> {
-        const val: any = await post("http://localhost:80/call", { cmd });
+        const val: any = await post("https://mocs.campbellsimpson.com/call", { cmd });
         if (val == "None") return undefined;
         else return JSON.parse(val);
     }
     private connectionId: string = "";
     protected connect(): void {
-        post("http://localhost:80/connect", this.self).then((function(this: HttpTextClient, data: string) {
+        post("https://mocs.campbellsimpson.com/connect", this.self).then((function(this: HttpTextClient, data: string) {
             if (data == "Invalid") { this.close(); return; }
             this.connectionId = data;
             this.onConnect();
@@ -47,7 +47,7 @@ class HttpTextClient extends ClientBase {
     }
     protected afterConnect(): void {
         this.interval = setInterval((function(this: HttpTextClient) {
-            post("http://localhost:80/keepAlive", {
+            post("https://mocs.campbellsimpson.com/keepAlive", {
                 id: this.connectionId
             }).then((function(this: HttpTextClient, data: string) {
                 if (data == "Invalid") this.close();
@@ -67,7 +67,7 @@ class HttpTextClient extends ClientBase {
         if (this.connectCallback) this.connectCallback();
     }
     protected returnValue(returnId: string, returnVals: any[]): void {
-        post("http://localhost:80/return", {
+        post("https://mocs.campbellsimpson.com/return", {
             id: this.connectionId,
             values: returnVals
         }).then((function(this: HttpTextClient, data: string) {
@@ -75,7 +75,7 @@ class HttpTextClient extends ClientBase {
         }).bind(this));
     }
     protected actuallyUpdateValue(name: string, value: any): void {
-        post("http://localhost:80/updateValue", {
+        post("https://mocs.campbellsimpson.com/updateValue", {
             id: this.connectionId,
             name,
             value

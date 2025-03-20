@@ -49,6 +49,12 @@ bool startedRecieving = false;
 bool lastwasAvaliable = false;
 bool finishedRecieving = true;
 std::string data = "";
+void clearVars() {
+  startedRecieving = false;
+  lastwasAvaliable = false;
+  finishedRecieving = true;
+  data = "";
+}
 bool startPostRequest(const char *host, const int &port, const char *path, const std::string &postData) {
   if (!wifiClientStatus()) return false;
   if (!finishedRecieving) return false;
@@ -61,7 +67,10 @@ bool startPostRequest(const char *host, const int &port, const char *path, const
 #if _WIFI_DEBUG
     myPrint("Successfully connected to \"");
     myPrint(host);
-    myPrintln("\"");
+    myPrint(':');
+    myPrint(port);
+    myPrint(path);
+    myPrintln('"');
 #endif
     // Make a HTTP request
     client.print("POST ");

@@ -31,7 +31,7 @@ class HttpJsonClient extends ClientBase {
     protected async sendCmd(cmd: string): Promise<any> {
         try {
             // send a command to the server and receive the response
-            const raw: string = (await postJson("http://localhost:80/call", { cmd }));
+            const raw: string = (await postJson("https://mocs.campbellsimpson.com/call", { cmd }));
             const value: any = JSON.parse(raw).value;
             if (value == "None") return undefined;
             else return JSON.parse(value);
@@ -42,7 +42,7 @@ class HttpJsonClient extends ClientBase {
     private connectionId: string = "";
     protected connect(): void {
         // send device object to server
-        postJson("http://localhost:80/connect", this.self).then((function(this: HttpJsonClient, raw: string) {
+        postJson("https://mocs.campbellsimpson.com/connect", this.self).then((function(this: HttpJsonClient, raw: string) {
             try {
                 const data: { status: boolean, id: string } = JSON.parse(raw);
                 if (!data.status) {
@@ -64,7 +64,7 @@ class HttpJsonClient extends ClientBase {
     protected afterConnect(): void {
         // set interval to do keep alive with the server every second
         this.interval = setInterval((function(this: HttpJsonClient) {
-            postJson("http://localhost:80/keepAlive", {
+            postJson("https://mocs.campbellsimpson.com/keepAlive", {
                 id: this.connectionId
             }).then((function(this: HttpJsonClient, raw: string) {
                 try {
@@ -79,7 +79,7 @@ class HttpJsonClient extends ClientBase {
         if (this.connectCallback) this.connectCallback();
     }
     protected returnValue(returnId: string, returnVals: any[]): void {
-        postJson("http://localhost:80/return", {
+        postJson("https://mocs.campbellsimpson.com/return", {
             id: this.connectionId,
             values: returnVals
         }).then((function(this: HttpJsonClient, raw: string) {
@@ -92,7 +92,7 @@ class HttpJsonClient extends ClientBase {
         }).bind(this));
     }
     protected actuallyUpdateValue(name: string, value: any): void {
-        postJson("http://localhost:80/updateValue", {
+        postJson("https://mocs.campbellsimpson.com/updateValue", {
             id: this.connectionId,
             name,
             value

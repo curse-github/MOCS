@@ -1,4 +1,5 @@
 #include <string>
+#include <vector>
 
 //https://m.media-amazon.com/images/I/71n5cYRJInL._AC_SL1500_.jpg
 #define D6 12
@@ -14,31 +15,33 @@ enum class WaitingOnEnum {
   None,
   Key,
   Cmd,
-  ReturnRes,
-  Return
+  Generic
 };
 bool isMocsActive = false;
 const std::string self = "{ \"name\": \"ESP\", \"values\": [ { \"name\": \"lights\", \"type\": \"Bool\", \"value\": true } ] }";
 std::string connectionId = "";
 unsigned long lastKeepAliveTime = 0;
 WaitingOnEnum waitingOn = WaitingOnEnum::None;
+std::vector<std::string> msgQueuePage;
+std::vector<std::string> msgQueueData;
 void setup() {
   serialInit();
-  wifiInitConnection("CurseNet24", "simpsoncentral");
-  while (!wifiClientStatus()) {
+  while (!wifiClientStatus())
     wifiInitConnection("CurseNet24", "simpsoncentral");
-  }
   sensorInit();
   outputInit();
-  while (!startPostRequest("192.168.0.105",80,"/connect", self)&&wifiClientStatus()) {}
-  waitingOn = WaitingOnEnum::Key;
 }
 void connectionClosed() {
   myPrintln("Mocs connection closed.");
+  // set mocs vars
   isMocsActive = false;
   connectionId = "";
   waitingOn = WaitingOnEnum::None;
   lastKeepAliveTime = 0;
+  msgQueuePage.clear();
+  msgQueueData.clear();
+  // set http vars
+  clearVars();
 }
 void loop() {
   if (wifiClientStatus() && !isPostRequestDone()) {
@@ -57,24 +60,32 @@ void loop() {
           waitingOn = WaitingOnEnum::None;
           break;
         case WaitingOnEnum::Cmd:
-          if (data == "") { waitingOn = WaitingOnEnum::None; break; }
-          for (int i = 0; i < data.size(); i++) if (data[i] == '\n') numNewLines++;
-          if ((numNewLines%2) == 0)
-            toggle();
+          lastKeepAliveTime = millis();
+          waitingOn = WaitingOnEnum::None;
+          if (data == "") break;
+          // parse the commands
+          for (int i = 0; i < data.size(); i++) {
+            if (data[i] == '\n') {
+              if (returnCmd.substr(0,11) == "lights.set(")
+                setState(returnCmd.substr(11,4) == "true");
+              returnCmd = "";
+              numNewLines++;
+            } else if (data[i] != '\r')
+              returnCmd += data[i];
+          }
+          if (returnCmd.substr(0,11) == "lights.set(")
+            setState(returnCmd.substr(11,4) == "true");
+          // return list of null values
           returnCmd = "{\"id\":\"";
           returnCmd += connectionId;
           returnCmd += "\", \"values\":[null";
           for(int i = 0; i < numNewLines; i++)
             returnCmd += ",null";
           returnCmd += "]}";
-          if (startPostRequest("192.168.0.105",80,"/return", returnCmd))
-            waitingOn = WaitingOnEnum::ReturnRes;
-          else { connectionClosed(); return; }
+          msgQueuePage.push_back("/return");
+          msgQueueData.push_back(returnCmd);
           break;
-        case WaitingOnEnum::ReturnRes:
-          waitingOn = WaitingOnEnum::None;
-          break;
-        case WaitingOnEnum::Return:
+        case WaitingOnEnum::Generic:
           waitingOn = WaitingOnEnum::None;
           break;
         case WaitingOnEnum::None:
@@ -87,22 +98,37 @@ void loop() {
       //myPrintln(data);
     }
   }
-  if (wifiClientStatus() && isPostRequestDone() && ((millis() - lastKeepAliveTime) >= 1000) && (waitingOn == WaitingOnEnum::None)) {
+  if (wifiClientStatus() && isPostRequestDone() && (waitingOn == WaitingOnEnum::None)) {
     if (isMocsActive) {
-      std::string msg = "{\"id\":\"";
-      msg += connectionId;
-      msg += "\"}";
-      if (startPostRequest("192.168.0.105",80,"/keepAlive", msg))
-        waitingOn = WaitingOnEnum::Cmd;
-        else { connectionClosed(); return; }
-    } else {
+      // connected to mocs
+      if ((millis() - lastKeepAliveTime) >= 1000) {
+        // send the keepalive
+        std::string msg = "{\"id\":\"";
+        msg += connectionId;
+        msg += "\"}";
+        if (startPostRequest("192.168.0.105",80,"/keepAlive", msg))
+          waitingOn = WaitingOnEnum::Cmd;
+          else connectionClosed();
+      } else if (msgQueuePage.size() > 0) {
+        // do commands from the queue
+        for(int i = 0; i < msgQueuePage.size(); i++) {
+          if (msgQueuePage[i].size() == 0) continue;
+          if (startPostRequest("192.168.0.105", 80, msgQueuePage[i].c_str(), msgQueueData[i])) {
+            waitingOn = WaitingOnEnum::Generic;
+            msgQueuePage[i] = "";
+            msgQueueData[i] = "";
+          } else connectionClosed();
+        }
+      }
+    } else if ((millis() - lastKeepAliveTime) >= 1000) {
+      // not connected to mocs
+      // retry connection if it has been a seconds since it tried last
+      lastKeepAliveTime = millis();
       if(startPostRequest("192.168.0.105",80,"/connect", self))
         waitingOn = WaitingOnEnum::Key;
-      else { connectionClosed(); return; }
+      else connectionClosed();
     }
-    lastKeepAliveTime = millis();
-  }
-  if (!wifiClientStatus()) {
+  } else if (!wifiClientStatus()) {
     wifiInitConnection("CurseNet24", "simpsoncentral");
     if (wifiClientStatus()) {
       while (!startPostRequest("192.168.0.105",80,"/connect", self)&&wifiClientStatus()) {}
@@ -124,9 +150,8 @@ void onButton(const char &button) {
         msg += "\", \"name\": \"lights\", \"value\": ";
         msg += (newState?"true":"false");
         msg += " }";
-        if (startPostRequest("192.168.0.105",80,"/updateValue", msg))
-          waitingOn = WaitingOnEnum::ReturnRes;
-        else { connectionClosed(); return; }
+        msgQueuePage.push_back("/updateValue");
+        msgQueueData.push_back(msg);
       }
       break;
     case '^':// Up
@@ -135,9 +160,8 @@ void onButton(const char &button) {
         msg = "{\"id\":\"";
         msg += connectionId;
         msg += "\", \"name\": \"lights\", \"value\": true }";
-        if (startPostRequest("192.168.0.105",80,"/updateValue", msg))
-          waitingOn = WaitingOnEnum::ReturnRes;
-        else { connectionClosed(); return; }
+        msgQueuePage.push_back("/updateValue");
+        msgQueueData.push_back(msg);
       }
       break;
     case 'v':// Down
@@ -148,12 +172,21 @@ void onButton(const char &button) {
         msg = "{\"id\":\"";
         msg += connectionId;
         msg += "\", \"name\": \"lights\", \"value\": false }";
-        if (startPostRequest("192.168.0.105",80,"/updateValue", msg))
-          waitingOn = WaitingOnEnum::ReturnRes;
-        else { connectionClosed(); return; }
+        msgQueuePage.push_back("/updateValue");
+        msgQueueData.push_back(msg);
       }
       break;
     case 't':// toggle or play/pause
+      newState = toggle();
+      if (isMocsActive) {
+        msg = "{\"id\":\"";
+        msg += connectionId;
+        msg += "\", \"name\": \"lights\", \"value\": ";
+        msg += (newState?"true":"false");
+        msg += " }";
+        msgQueuePage.push_back("/updateValue");
+        msgQueueData.push_back(msg);
+      }
       break;
     case '>':
       break;
