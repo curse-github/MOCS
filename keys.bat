@@ -1,2 +1,2 @@
-call npx web-push generate-vapid-keys
+powershell -Command "npx web-push generate-vapid-keys"
 pause

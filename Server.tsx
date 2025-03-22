@@ -5,6 +5,7 @@ import { readFileSync, writeFileSync } from "fs";
 import * as webpush from "web-push";
 import * as http from "http";
 
+// #region helpers
 let config: {[sec: string]: {[key: string]: string}} = {};
 function readConfig(): void {
     config = {};
@@ -342,6 +343,7 @@ class WebsocketServerWrapper {
         });
     }
 }
+// #endregion helpers
 
 // #region types
 type parameterType = {
@@ -589,9 +591,15 @@ function verifyDevice(device: deviceType): [ boolean, string ] {
 // #endregion type validation functions
 
 const dbFilePath: string = __dirname + "/database.json";
-
 const db: any = JSON.parse(readFileSync(dbFilePath).toString() || "{}");
-const users: userType[] = db.users || [];
+var users: userType[] = db.users || [];
+var sessionIdToUserName: { [id: string]: string } = db.sessionIdToUserName || {};
+var userNameToSessionId: { [name: string]: string } = db.userNameToSessionId || {};
+function saveDb() {
+    writeFileSync(dbFilePath, JSON.stringify({ users, sessionIdToUserName, userNameToSessionId }, undefined, "    "));
+}
+const SESSION_LENGTH = 14 * 24 * 60 * 60 * 1000;// 14 days, theoretical max is 24.something days
+
 const userIndexByName: {[name: string]: number} = {};
 const userIndexByEmail: {[email: string]: number} = {};
 for (let i = 0; i < users.length; i++) {
@@ -701,17 +709,13 @@ class ConnectionHandler {
 
     private deviceWsConnectionKey: (string|undefined)[] = [];
     private wsReturnResolves: {[key: string]: [string, (val: any)=> void]} = {};
-    private deviceWsSubscriptions: [any, string][] = [];
+    private deviceWsSubscriptions: string[] = [];
 
     private deviceHttpConnectionIds: (string|undefined)[] = [];
     private deviceHttpLastPingTime: {[id: string]: number} = {};
     private httpCmdQueue: {[id: string]: any[]} = {};
     private httpReturnResolveLists: {[id: string]: ((val: any)=> void)[]} = {};
 
-    SESSION_LENGTH = 48 * 60 * 60 * 1000;// 48 hours
-    private sessionIds: string[] = [];
-    private sessionTimeouts: number[] = [];
-    private sessionIdToUserName: { [id: string]: string } = {};
     constructor(port: number) {
         for (let i = 0; i < this.localDevices.length; i++)
             this.localDeviceNameToIndex[this.localDevices[i].name] = i;
@@ -732,6 +736,14 @@ class ConnectionHandler {
             delete this.websocketConnectionKeys[this.websocketConnectionKeys.indexOf(connectionKey)];
             delete this.websocketWsLastPingTime[connectionKey];
             const deviceIndex = this.deviceWsConnectionKey.indexOf(connectionKey);
+            for (let i = 0; i < this.deviceWsSubscriptions.length; i++) {
+                if (this.deviceWsSubscriptions[i] == undefined) continue;
+                const key: string = this.deviceWsSubscriptions[i];
+                if (key == connectionKey) {
+                    delete this.deviceWsSubscriptions[i];
+                    break;
+                }
+            }
             if (deviceIndex !== -1) {
                 const name: string = this.devices[deviceIndex].name;
                 console.log("Device \"" + name + "\" disconnected.");
@@ -747,8 +759,9 @@ class ConnectionHandler {
                 });
                 
                 for (let i = 0; i < this.deviceWsSubscriptions.length; i++) {
-                    const [ userIndex, key ]: [ any, string ] = this.deviceWsSubscriptions[i];
-                    const user: any = users[userIndex];
+                    if (this.deviceWsSubscriptions[i] == undefined) continue;
+                    const key: string = this.deviceWsSubscriptions[i];
+                    const user: userType = users[i];
                     if (user.isAdmin) {
                         this.wbsckt.send(key, JSON.stringify({
                             type: "disconnection",
@@ -792,8 +805,9 @@ class ConnectionHandler {
                 this.deviceHttpConnectionIds[index] = undefined;
 
                 for (let i = 0; i < this.deviceWsSubscriptions.length; i++) {
-                    const [ userIndex, key ]: [ any, string ] = this.deviceWsSubscriptions[i];
-                    const user: any = users[userIndex];
+                    if (this.deviceWsSubscriptions[i] == undefined) continue;
+                    const key: string = this.deviceWsSubscriptions[i];
+                    const user: userType = users[i];
                     if (user.isAdmin) {
                         this.wbsckt.send(key, JSON.stringify({
                             type: "connection",
@@ -835,8 +849,9 @@ class ConnectionHandler {
 
                 // call function on subscribers
                 for (let i = 0; i < this.deviceWsSubscriptions.length; i++) {
-                    const [ userIndex, key ]: [ any, string ] = this.deviceWsSubscriptions[i];
-                    const user: any = users[userIndex];
+                    if (this.deviceWsSubscriptions[i] == undefined) continue;
+                    const key: string = this.deviceWsSubscriptions[i];
+                    const user: userType = users[i];
                     if (user.isAdmin) {
                         this.wbsckt.send(key, JSON.stringify({
                             type: "update",
@@ -854,22 +869,32 @@ class ConnectionHandler {
                 return;
             } else if (data.type === "subscribe") {
                 if (
-                    (data.user == undefined) || (data.pass == undefined) || (data.user === "") || (data.pass === "")
-                    || (userIndexByName[data.user] == undefined)
+                    (data.sessionid == undefined) || (data.sessionid === "")
                 ) {
+                    // console.log("invalid session");
                     this.wbsckt.send(connectionKey, JSON.stringify({ type: "logout" }));
                     return;
                 }
-                const userIndex: number|undefined = userIndexByName[data.user];
+                const userName: string = sessionIdToUserName[data.sessionid];
+                if (userName == undefined) {
+                    // console.log("invalid session");
+                    this.wbsckt.send(connectionKey, JSON.stringify({ type: "logout" }));
+                    return;
+                }
+                const userIndex: number|undefined = userIndexByName[userName];
                 if (userIndex == undefined) {
+                    // console.log("invalid userindex");
                     this.wbsckt.send(connectionKey, JSON.stringify({ type: "logout" }));
                     return;
                 }
-                let index: number = -1;
-                for (let i = 0; i <= this.deviceWsSubscriptions.length; i++) {
-                    if (this.deviceWsSubscriptions[i] == undefined) { index = i; break; }
+                const oldConnectionKey: string = this.deviceWsSubscriptions[userIndex];
+                if (oldConnectionKey != undefined) {
+                    // console.log("duplicate subscription");
+                    this.wbsckt.send(oldConnectionKey, JSON.stringify({ type: "logout" }));
+                    this.wbsckt.closeConnection(oldConnectionKey);
+                    delete this.deviceWsSubscriptions[userIndex];
                 }
-                this.deviceWsSubscriptions[index] = [ userIndex, connectionKey ];
+                this.deviceWsSubscriptions[userIndex] = connectionKey;
 
                 const user = users[userIndex];
                 if (user.isAdmin && ((this.devices.length > 0) || (this.localDevices.length > 0))) {
@@ -941,8 +966,9 @@ class ConnectionHandler {
                 res.status(404).send("<html><body>404 Page Not Found</body></html>");
 
             for (let i = 0; i < this.deviceWsSubscriptions.length; i++) {
-                const [ userIndex, key ]: [ any, string ] = this.deviceWsSubscriptions[i];
-                const user: any = users[userIndex];
+                if (this.deviceWsSubscriptions[i] == undefined) continue;
+                const key: string = this.deviceWsSubscriptions[i];
+                const user: userType = users[i];
                 if (user.isAdmin) {
                     this.wbsckt.send(key, JSON.stringify({
                         type: "connection",
@@ -1078,8 +1104,9 @@ class ConnectionHandler {
             this.setValueOnDevice([ device.name ], req.body.name, validParamValue);
             // call function on subscribers
             for (let i = 0; i < this.deviceWsSubscriptions.length; i++) {
-                const [ userIndex, key ]: [ any, string ] = this.deviceWsSubscriptions[i];
-                const user: any = users[userIndex];
+                if (this.deviceWsSubscriptions[i] == undefined) continue;
+                const key: string = this.deviceWsSubscriptions[i];
+                const user: userType = users[i];
                 if (user.isAdmin) {
                     this.wbsckt.send(key, JSON.stringify({
                         type: "update",
@@ -1119,23 +1146,32 @@ class ConnectionHandler {
             if ((query.email == "") || (query.password == "")) { res.json(false); return; }
             const email: string = query.email as string;
             const pass_hash: string = query.password as string;
-            const index: number|undefined = userIndexByEmail[email.toLowerCase()];
-            if (index == undefined) { res.json(false); return; }
-            const user: any = users[index];
+            const userIndex: number|undefined = userIndexByEmail[email.toLowerCase()];
+            if (userIndex == undefined) { res.json(false); return; }
+            const user: any = users[userIndex];
             if ((user == undefined) || (user.pass_hash != pass_hash)) { res.json(false); return; }
             // it is a valid login
+            // delete old session
+            const oldSessionId: string|undefined = userNameToSessionId[user.name];
+            if (oldSessionId != undefined) {
+                delete sessionIdToUserName[oldSessionId];
+                delete userNameToSessionId[user.name];
+            }
+            // kick off old subscription
+            const oldConnectionKey: string|undefined = this.deviceWsSubscriptions[userIndex];
+            if (oldConnectionKey != undefined) {
+                this.wbsckt.send(oldConnectionKey, JSON.stringify({ type: "logout" }));
+                this.wbsckt.closeConnection(oldConnectionKey);
+                delete this.deviceWsSubscriptions[userIndex];
+            }
             // create a session
             const sessionId = generateUUID();
-            let sessionIndex: number = -1;
-            for (let i = 0; i <= this.sessionIds.length; i++) {
-                if (this.sessionIds[i] == undefined) { sessionIndex = i; break; }
-            }
-            this.sessionIds[sessionIndex] = sessionId;
-            this.sessionTimeouts[sessionIndex] = (new Date()).getTime() + this.SESSION_LENGTH;
-            this.sessionIdToUserName[sessionId] = user.name;
+            sessionIdToUserName[sessionId] = user.name;
+            userNameToSessionId[user.name] = sessionId;
+            saveDb();
             // set their session id
-            res.cookie("sessionid", sessionId, { maxAge: this.SESSION_LENGTH, httpOnly: false });
-            res.cookie("name", user.name);
+            res.cookie("sessionid", sessionId, { maxAge: SESSION_LENGTH, httpOnly: false });
+            // res.cookie("name", user.name);
             res.json(true);
             // console.log("User \"" + user.name + "\" logged in.");
         }).bind(this));
@@ -1144,17 +1180,7 @@ class ConnectionHandler {
             this.exprs.get(path, (async function(this: ConnectionHandler, req: Request, res: Response) {
                 const cookies: any = getCookies(req);
                 if (cookies.sessionid == undefined) { res.redirect("/login"); return; }
-                const time = (new Date()).getTime();
-                for (let i = 0; i < this.sessionIds.length; i++) {
-                    if (this.sessionIds[i] == undefined) continue;
-                    const sessionId: string = this.sessionIds[i];
-                    if ((time - this.sessionTimeouts[i]) >= 0) {
-                        delete this.sessionIds[i];
-                        delete this.sessionTimeouts[i];
-                        delete this.sessionIdToUserName[sessionId];
-                    }
-                }
-                if (this.sessionIdToUserName[cookies.sessionid] == undefined) { res.redirect("/login"); return; }
+                if (sessionIdToUserName[cookies.sessionid] == undefined) { res.redirect("/login"); return; }
                 res.sendFile(__dirname + filePath, (err: Error) => {
                     if (err == undefined) return;
                     console.log("Couldnt find " + path + " file.", "\"" + err.name + "\": " + err.message);
@@ -1184,25 +1210,15 @@ class ConnectionHandler {
         this.exprs.post("/notif/subscribe", (async function(this: ConnectionHandler, req: Request, res: Response) {
             const cookies: any = getCookies(req);
             if (cookies.sessionid == undefined) { res.redirect("/login"); return; }
-            const time = (new Date()).getTime();
-            for (let i = 0; i < this.sessionIds.length; i++) {
-                if (this.sessionIds[i] == undefined) continue;
-                const sessionId: string = this.sessionIds[i];
-                if ((time - this.sessionTimeouts[i]) >= 0) {
-                    delete this.sessionIds[i];
-                    delete this.sessionTimeouts[i];
-                    delete this.sessionIdToUserName[sessionId];
-                }
-            }
-            if (this.sessionIdToUserName[cookies.sessionid] == undefined) { res.redirect("/login"); return; }
-            const username: string = this.sessionIdToUserName[cookies.sessionid];
+            if (sessionIdToUserName[cookies.sessionid] == undefined) { res.redirect("/login"); return; }
+            const username: string = sessionIdToUserName[cookies.sessionid];
             const { endpoint, keys } = req.body;
             users[userIndexByName[username]].notifSub = {
                 type: "webpush",
                 endpoint: (endpoint as string),
                 keys: (keys as { auth: string, p256dh: string })
             };
-            writeFileSync(dbFilePath, JSON.stringify({ users }, undefined, "    "));
+            saveDb();
         }).bind(this));
         this.exprs.get("/", (req: Request, res: Response) => { res.redirect("/index"); });
     }
@@ -1507,8 +1523,9 @@ class ConnectionHandler {
                             delete this.httpReturnResolveLists[id];
                             
                             for (let i = 0; i < this.deviceWsSubscriptions.length; i++) {
-                                const [ userIndex, key ]: [ any, string ] = this.deviceWsSubscriptions[i];
-                                const user: any = users[userIndex];
+                                if (this.deviceWsSubscriptions[i] == undefined) continue;
+                                const key: string = this.deviceWsSubscriptions[i];
+                                const user: userType = users[i];
                                 if (user.isAdmin) {
                                     this.wbsckt.send(key, JSON.stringify({
                                         type: "disconnection",
@@ -1526,8 +1543,10 @@ class ConnectionHandler {
                 }, intervalTime);
                 console.clear();
                 console.log("Server started.");
-                console.log("Websocket server on wss://mocs.campbellsimpson.com/ws.");
+                console.log("Wss server on wss://mocs.campbellsimpson.com/ws.");
+                console.log("ws server on ws://localhost:8080/ws.");
                 console.log("Https server on https://mocs.campbellsimpson.com.");
+                console.log("Http server on http://localhost:8080.");
             });
         });
     }

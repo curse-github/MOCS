@@ -106,14 +106,14 @@ void loop() {
         std::string msg = "{\"id\":\"";
         msg += connectionId;
         msg += "\"}";
-        if (startPostRequest("192.168.0.105",80,"/keepAlive", msg))
+        if (startPostRequest("192.168.0.105",8080,"/keepAlive", msg))
           waitingOn = WaitingOnEnum::Cmd;
           else connectionClosed();
       } else if (msgQueuePage.size() > 0) {
         // do commands from the queue
         for(int i = 0; i < msgQueuePage.size(); i++) {
           if (msgQueuePage[i].size() == 0) continue;
-          if (startPostRequest("192.168.0.105", 80, msgQueuePage[i].c_str(), msgQueueData[i])) {
+          if (startPostRequest("192.168.0.105", 8080, msgQueuePage[i].c_str(), msgQueueData[i])) {
             waitingOn = WaitingOnEnum::Generic;
             msgQueuePage[i] = "";
             msgQueueData[i] = "";
@@ -124,14 +124,14 @@ void loop() {
       // not connected to mocs
       // retry connection if it has been a seconds since it tried last
       lastKeepAliveTime = millis();
-      if(startPostRequest("192.168.0.105",80,"/connect", self))
+      if(startPostRequest("192.168.0.105",8080,"/connect", self))
         waitingOn = WaitingOnEnum::Key;
       else connectionClosed();
     }
   } else if (!wifiClientStatus()) {
     wifiInitConnection("CurseNet24", "simpsoncentral");
     if (wifiClientStatus()) {
-      while (!startPostRequest("192.168.0.105",80,"/connect", self)&&wifiClientStatus()) {}
+      while (!startPostRequest("192.168.0.105",8080,"/connect", self)&&wifiClientStatus()) {}
       waitingOn = WaitingOnEnum::Key;
     }
   }

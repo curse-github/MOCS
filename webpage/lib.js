@@ -44,7 +44,7 @@ function setup() {
         }
         messageElement.innerText = "None of your devices are currently connected.";
         const cookies = Object.fromEntries(document.cookie.split(";").map((str) => str.trim().split("=")));
-        ws.send(JSON.stringify({ type: "subscribe", user: cookies.name, pass: "pass" }));
+        ws.send(JSON.stringify({ type: "subscribe", sessionid: cookies.sessionid }));
         ws.onmessage = (message) => {
             const raw = message.data;
             try {
