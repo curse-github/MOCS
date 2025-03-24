@@ -115,7 +115,7 @@ function processDevice(parent, parentName, device) {
             switch (value.type) {
                 case "String":
                     el = addInput(parent, "text", parentName + device.name + "." + value.name, (data) => {
-                        callAndPrint("\"" + data + "\"");
+                        if (!value.readonly) callAndPrint("\"" + data + "\"");
                     });
                     updateCallbacks[parentName + device.name + "." + value.name] = (newValue) => {
                         el.value = newValue;
@@ -124,7 +124,7 @@ function processDevice(parent, parentName, device) {
                     break;
                 case "Number":
                     el = addInput(parent, "number", parentName + device.name + "." + value.name, (data) => {
-                        callAndPrint(data);
+                        if (!value.readonly) callAndPrint(data);
                     });
                     updateCallbacks[parentName + device.name + "." + value.name] = (newValue) => {
                         el.value = newValue;
@@ -133,7 +133,7 @@ function processDevice(parent, parentName, device) {
                     break;
                 case "Bool":
                     el = addInput(parent, "checkbox", parentName + device.name + "." + value.name, (data) => {
-                        callAndPrint((data ? "true" : "false"));
+                        if (!value.readonly) callAndPrint((data ? "true" : "false"));
                     });
                     updateCallbacks[parentName + device.name + "." + value.name] = (newValue) => {
                         el.checked = newValue;
@@ -142,7 +142,7 @@ function processDevice(parent, parentName, device) {
                     break;
                 case "Color":
                     el = addInput(parent, "color", parentName + device.name + "." + value.name, (data) => {
-                        callAndPrint("\"" + data.toUpperCase() + "\"");
+                        if (!value.readonly) callAndPrint("\"" + data.toUpperCase() + "\"");
                     });
                     updateCallbacks[parentName + device.name + "." + value.name] = (newValue) => {
                         el.value = newValue.toLowerCase();
@@ -152,6 +152,7 @@ function processDevice(parent, parentName, device) {
                 default:
                     break;
             }
+            if (value.readonly) el.setAttribute("disabled", true)
             addBr(parent);
             //console.log(parentName + device.name + "." + value.name + " = " + JSON.stringify(value.value));
             //console.log(parentName + device.name + "." + value.name + ".get(\"" + value.type + "\")");

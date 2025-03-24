@@ -1,5 +1,13 @@
 #include <string>
 #include <vector>
+#include <sstream>
+#include <iomanip>
+
+struct updateValueStr {
+  std::string name;
+  unsigned int valueNum;
+  bool valueBool;
+};
 
 //https://m.media-amazon.com/images/I/71n5cYRJInL._AC_SL1500_.jpg
 #define D6 12
@@ -18,42 +26,71 @@ enum class WaitingOnEnum {
   Generic
 };
 bool isMocsActive = false;
-const std::string self = "{ \"name\": \"ESP\", \"values\": [ { \"name\": \"lights\", \"type\": \"Bool\", \"value\": true } ] }";
+const char *ip = "192.168.0.105";
+const char *ssid = "CurseNet24";
+const char *password = "simpsoncentral";
+const char *self = "{\"name\":\"ESP8266\",\"values\":[{\"name\":\"fan\",\"type\":\"Bool\",\"value\":true,\"readonly\":false},{\"name\":\"ir\",\"type\":\"String\",\"value\":\"\",\"readonly\":true}]}";
 std::string connectionId = "";
 unsigned long lastKeepAliveTime = 0;
 WaitingOnEnum waitingOn = WaitingOnEnum::None;
-std::vector<std::string> msgQueuePage;
-std::vector<std::string> msgQueueData;
+std::vector<updateValueStr> updateQueue;
 void setup() {
   serialInit();
   while (!wifiClientStatus())
-    wifiInitConnection("CurseNet24", "simpsoncentral");
+    wifiInitConnection(ssid, password);
   sensorInit();
   outputInit();
 }
-void connectionClosed() {
+void handleCmd(const std::string &cmd) {
+  if (cmd.substr(0,8) == "fan.set(")
+    setState(cmd[8] == 't');
+}
+std::string workingStr = "";
+void executeUpdateValue(const updateValueStr &str) {
+  workingStr = "{\"id\":\"";
+  workingStr += connectionId;
+  workingStr += "\",\"name\":\"";
+  workingStr += str.name;
+  workingStr += "\",\"value\":";
+  if (str.name[0]=='f') {
+    workingStr += (str.valueBool?"true":"false");
+  } else if (str.name[0]=='i') {
+    std::stringstream ss;
+    ss << "0x" << std::hex << std::uppercase << str.valueNum;
+    workingStr += "\"" + ss.str() + "\"";
+  } else return;
+  workingStr += '}';
+  waitingOn = WaitingOnEnum::Generic;
+  if (!startPostRequest(ip, 8080, "/updateValue", workingStr))
+    mocsConnectionClosed();
+  workingStr = "";
+}
+void mocsConnectionClosed() {
   myPrintln("Mocs connection closed.");
   // set mocs vars
   isMocsActive = false;
   connectionId = "";
   waitingOn = WaitingOnEnum::None;
   lastKeepAliveTime = 0;
-  msgQueuePage.clear();
-  msgQueueData.clear();
+  updateQueue.clear();
   // set http vars
   clearVars();
 }
-void loop() {
+void mocsLoop() {
+  // myPrint(ESP.getFreeHeap());
+  // myPrintln(" bytes");
   if (wifiClientStatus() && !isPostRequestDone()) {
     std::string data = continuePostRequest();
     if (data != "") {
       data.erase(0, 1);// remove the first character.
-      if (data == "Invalid") { connectionClosed(); return; }
+      if (data == "Invalid") { mocsConnectionClosed(); return; }
+      // allocate variables up here
       unsigned int numNewLines = 0;// num commands is the number of new lines plus one
-      std::string returnCmd = "";
+      // switch based on what the program is expecting
       switch (waitingOn) {
         case WaitingOnEnum::Key:
-          if (data == "") { waitingOn = WaitingOnEnum::None; break; }
+          waitingOn = WaitingOnEnum::None;
+          if (data == "") break;// failed to connect
           myPrintln("Mocs connection opened.");
           connectionId = data;
           isMocsActive = true;
@@ -63,130 +100,98 @@ void loop() {
           lastKeepAliveTime = millis();
           waitingOn = WaitingOnEnum::None;
           if (data == "") break;
-          // parse the commands
+          // parse commands
           for (int i = 0; i < data.size(); i++) {
+            if (data[i] == '\r') continue;
             if (data[i] == '\n') {
-              if (returnCmd.substr(0,11) == "lights.set(")
-                setState(returnCmd.substr(11,4) == "true");
-              returnCmd = "";
+              handleCmd(workingStr);
+              workingStr = "";
               numNewLines++;
-            } else if (data[i] != '\r')
-              returnCmd += data[i];
+            } else workingStr += data[i];
           }
-          if (returnCmd.substr(0,11) == "lights.set(")
-            setState(returnCmd.substr(11,4) == "true");
-          // return list of null values
-          returnCmd = "{\"id\":\"";
-          returnCmd += connectionId;
-          returnCmd += "\", \"values\":[null";
+          if (workingStr.size()>0) handleCmd(workingStr);
+          // create return statement
+          workingStr = "{\"id\":\"";
+          workingStr += connectionId;
+          workingStr += "\",\"values\":[null";
           for(int i = 0; i < numNewLines; i++)
-            returnCmd += ",null";
-          returnCmd += "]}";
-          msgQueuePage.push_back("/return");
-          msgQueueData.push_back(returnCmd);
+            workingStr += ",null";
+          workingStr += "]}";
+          // do post request
+          waitingOn = WaitingOnEnum::Generic;
+          if (!startPostRequest(ip, 8080, "/return", workingStr))
+            mocsConnectionClosed();
+          workingStr = "";
           break;
         case WaitingOnEnum::Generic:
           waitingOn = WaitingOnEnum::None;
-          break;
-        case WaitingOnEnum::None:
-          myPrintln("ERROR");
           break;
         default:
           myPrintln("ERROR");
           break;
       }
-      //myPrintln(data);
-    }
-  }
-  if (wifiClientStatus() && isPostRequestDone() && (waitingOn == WaitingOnEnum::None)) {
-    if (isMocsActive) {
-      // connected to mocs
-      if ((millis() - lastKeepAliveTime) >= 1000) {
-        // send the keepalive
-        std::string msg = "{\"id\":\"";
-        msg += connectionId;
-        msg += "\"}";
-        if (startPostRequest("192.168.0.105",8080,"/keepAlive", msg))
-          waitingOn = WaitingOnEnum::Cmd;
-          else connectionClosed();
-      } else if (msgQueuePage.size() > 0) {
-        // do commands from the queue
-        for(int i = 0; i < msgQueuePage.size(); i++) {
-          if (msgQueuePage[i].size() == 0) continue;
-          if (startPostRequest("192.168.0.105", 8080, msgQueuePage[i].c_str(), msgQueueData[i])) {
-            waitingOn = WaitingOnEnum::Generic;
-            msgQueuePage[i] = "";
-            msgQueueData[i] = "";
-          } else connectionClosed();
-        }
-      }
-    } else if ((millis() - lastKeepAliveTime) >= 1000) {
-      // not connected to mocs
-      // retry connection if it has been a seconds since it tried last
-      lastKeepAliveTime = millis();
-      if(startPostRequest("192.168.0.105",8080,"/connect", self))
-        waitingOn = WaitingOnEnum::Key;
-      else connectionClosed();
     }
   } else if (!wifiClientStatus()) {
-    wifiInitConnection("CurseNet24", "simpsoncentral");
-    if (wifiClientStatus()) {
-      while (!startPostRequest("192.168.0.105",8080,"/connect", self)&&wifiClientStatus()) {}
+    while (!wifiClientStatus())
+      wifiInitConnection(ssid, password);
+  } else if (isPostRequestDone()) {
+    if (!isMocsActive && ((millis() - lastKeepAliveTime) >= 10000) ) {
+      lastKeepAliveTime = millis();
       waitingOn = WaitingOnEnum::Key;
+      if(!startPostRequest(ip,8080,"/connect", self))
+        mocsConnectionClosed();
+    }
+    if (!isMocsActive) return;
+    // connected to mocs
+    if ((millis() - lastKeepAliveTime) >= 1000) {
+      // send the keepalive if it has been longer than a second
+      workingStr = "{\"id\":\"";
+      workingStr += connectionId;
+      workingStr += "\"}";
+      waitingOn = WaitingOnEnum::Cmd;
+      if (!startPostRequest(ip,8080,"/keepAlive", workingStr))
+        mocsConnectionClosed();
+      workingStr = "";
+    } else if (updateQueue.size() > 0) {
+      // do commands from the queue
+      for(int i = 0; i < updateQueue.size(); i++) {
+        if (updateQueue[i].name.size() == 0) continue;
+        executeUpdateValue(updateQueue[i]);
+        updateQueue[i].name = "";
+        return;
+      }
+      updateQueue.clear();
     }
   }
+}
+void loop() {
+  mocsLoop();
   onButton(sensorRead());
 }
-void onButton(const char &button) {
-  if (button=='E') return;
+void onButton(const int &code) {
+  if (code==0) return;
+  updateQueue.push_back({ "ir",static_cast<unsigned int>(code),false });
+  const char button = encode(code);
+  if (button == 'E') return;
   bool newState = false;
-  std::string msg = "";
   switch(button) {
     case 'p':// Power
       newState = toggle();
-      if (isMocsActive) {
-        msg = "{\"id\":\"";
-        msg += connectionId;
-        msg += "\", \"name\": \"lights\", \"value\": ";
-        msg += (newState?"true":"false");
-        msg += " }";
-        msgQueuePage.push_back("/updateValue");
-        msgQueueData.push_back(msg);
-      }
+      updateQueue.push_back({ "fan",0,newState });
       break;
     case '^':// Up
       setState(true);
-      if (isMocsActive) {
-        msg = "{\"id\":\"";
-        msg += connectionId;
-        msg += "\", \"name\": \"lights\", \"value\": true }";
-        msgQueuePage.push_back("/updateValue");
-        msgQueueData.push_back(msg);
-      }
+      updateQueue.push_back({ "fan",0,true });
       break;
     case 'v':// Down
     case 'f':// FUNC/STOP
     case 's':// ST/REPT
       setState(false);
-      if (isMocsActive) {
-        msg = "{\"id\":\"";
-        msg += connectionId;
-        msg += "\", \"name\": \"lights\", \"value\": false }";
-        msgQueuePage.push_back("/updateValue");
-        msgQueueData.push_back(msg);
-      }
+      updateQueue.push_back({ "fan",0,false });
       break;
     case 't':// toggle or play/pause
       newState = toggle();
-      if (isMocsActive) {
-        msg = "{\"id\":\"";
-        msg += connectionId;
-        msg += "\", \"name\": \"lights\", \"value\": ";
-        msg += (newState?"true":"false");
-        msg += " }";
-        msgQueuePage.push_back("/updateValue");
-        msgQueueData.push_back(msg);
-      }
+      updateQueue.push_back({ "fan",0,newState });
       break;
     case '>':
       break;

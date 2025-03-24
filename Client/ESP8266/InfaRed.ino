@@ -5,16 +5,16 @@ void sensorInit() {
   IrReceiver.begin(sensorPin);
 }
 bool didDecode = false;
-char sensorRead() {
+int sensorRead() {
   if (didDecode) IrReceiver.resume();
   didDecode = IrReceiver.decode();
   if (didDecode)
-    return recode(IrReceiver.decodedIRData.decodedRawData);
+    return IrReceiver.decodedIRData.decodedRawData;
   else
-    return 'E';
+    return 0;
 }
 
-char recode(int code) {
+char encode(int code) {
   switch(code) {
     case 0xBA45FF00:// Power
       return 'p';

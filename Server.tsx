@@ -361,7 +361,8 @@ export type functionType = {
 type valueType = {
     name: string,
     type: "String"|"Number"|"Bool"|"Color",
-    value: any
+    value: any,
+    readonly: boolean
 };
 type deviceType = {
     name: string,
@@ -542,6 +543,7 @@ function verifyValue(value: valueType): [ boolean, string ] {
     const [ verified, validValue ] = verifyParamOfType(JSON.stringify(value.value), value.type);
     if (!verified) return [ false, "Value value field does not match type." ];
     value.value = validValue;
+    if ((typeof value.readonly) != "boolean") return [ false, "Value readonly must be boolean" ];
     return [ true, "" ];
 }
 function verifyDevice(device: deviceType): [ boolean, string ] {
@@ -1434,7 +1436,7 @@ class ConnectionHandler {
     async handleGetSetCmd(deviceCallSig: string[], valueName: string, type: "get" | "set", params: string[]): Promise<any> {
         const deviceIndex: number = this.deviceNameToIndex[deviceCallSig[0]];// the index of the device
         if (deviceIndex == undefined) { console.error("Command attempted to call function on non-existant device."); return "None"; }
-        // get value 
+        // get value
         const value: valueType|undefined = this.getValueObjOnDevice(deviceCallSig, valueName);
         if (value == undefined) { console.error("Command attempted to " + type + " value of non-existant value."); return "None"; }
         // do action based on type
@@ -1442,6 +1444,7 @@ class ConnectionHandler {
             if ((params.length != 0) && !((params.length === 1) && params[0] === "")) { console.error("Getters do not take arguments."); return "None"; }
             return JSON.stringify(value.value);
         } else {
+            if (value.readonly) { console.error("Command attempted to set readonly value."); return "None"; }
             if (params.length === 0) { console.error("Paramter is required for setter function."); return "None"; }
             if (params.length > 1) { console.error("Too many parameters were passed for a setter function."); return "None"; }
             const [ paramValid, validParamValue ] = verifyParamOfType(params[0], value.type);
@@ -1515,6 +1518,7 @@ class ConnectionHandler {
                             delete this.deviceNameToIndex[name];
                             delete this.deviceWsConnectionKey[i];
                             delete this.deviceHttpConnectionIds[i];
+                            console.log(name, " hasnt pinged in " + (((new Date()).getTime() - this.deviceHttpLastPingTime[id]!) / 1000) + "s.");
                             delete this.deviceHttpLastPingTime[id];
                             delete this.httpCmdQueue[id];
                             const returnResolveList: ((val: any)=> void)[] = this.httpReturnResolveLists[id];
