@@ -1,4 +1,4 @@
-import { parameterType, functionType, valueType, deviceType, ClientBase } from "./ClientBase.jsx";
+import { ClientBase } from "./ClientBase.jsx";
 import { WebSocket, RawData } from "ws";// https://www.npmjs.com/package/ws
 
 function generateUUID(): string {
@@ -90,35 +90,66 @@ class WsClient extends ClientBase {
 }
 const name: string = "WsDevice";
 const client: WsClient = new WsClient(name);
-client.addFunction("func1", [], [], "None", () => {
-    console.log("func1()");
+client.addFunction("func1")!
+    .addOverload(true, "none", () => {
+        console.log("func1()");
+    });
+client.addFunction("func2")!
+    .addOverload(true, "none", (str: string) => {
+        console.log("func2(\"" + str + "\")");
+    })
+    .addStringParameter("start");
+client.addFunction("func3")!
+    .addOverload(true, "none", (float1: number, float2: number) => {
+        console.log("func3(" + float1 + ", " + float2 + ")");
+    })
+    .addNumberParameter("float", 0.5, "normal", [ 0, 1 ])
+    .addNumberParameter("float", 0.5, "slider", [ 0, 1 ]);
+client.addFunction("func4")!
+    .addOverload(true, "none", (int1: number, int2: number) => {
+        console.log("func4(" + int1 + ", " + int2 + ")");
+    })
+    .addNumberParameter("integer", 1, "normal", [ 0, 5 ])
+    .addNumberParameter("integer", 1, "slider", [ 0, 5 ]);
+client.addFunction("func5")!
+    .addOverload(true, "none", (bool: boolean) => {
+        console.log("func5(" + (bool ? "true" : "false") + ")");
+    })
+    .addBoolParameter(false);
+client.addFunction("func6")!
+    .addOverload(true, "none", (int: number) => {
+        console.log("func6(" + int + ")");
+    })
+    .addColorParameter("#FF00FF");
+client.addStringValue("val1", "start", false, (value: string) => {
+    console.log("val1 = \"" + value + "\"");
 });
-client.addFunction("func2", [ "String" ], [ ], "None", (str: string) => {
-    console.log("func2(\"" + str + "\")");
+client.addNumberValue("val2", "float", 0.5, false, "decimal", (value: number) => {
+    console.log("val2 = " + value);
+}, [ 0, 1 ]);
+client.addNumberValue("val3", "float", 0.5, false, "slider", (value: number) => {
+    console.log("val3 = " + value);
+}, [ 0, 1 ]);
+client.addNumberValue("val4", "integer", 1, false, "decimal", (value: number) => {
+    console.log("val4 = " + value);
+}, [ 0, 5 ]);
+client.addNumberValue("val5", "integer", 1, false, "slider", (value: number) => {
+    console.log("val5 = " + value);
+}, [ 0, 255 ]);
+client.addBooleanValue("val6", false, false, (value: boolean) => {
+    console.log("val6 = " + (value ? "true" : "false"));
 });
-client.addFunction("func3", [ "Number" ], [ ], "None", (num: number) => {
-    console.log("func3(" + num + ")");
+client.addColorValue("val7", "#00FFFF", false, (value: `#${string}`) => {
+    console.log("val7 = " + value);
 });
-client.addFunction("func4", [ "Bool" ], [ ], "None", (bool: boolean) => {
-    console.log("func4(" + (bool ? "true" : "false") + ")");
-});
-client.addFunction("func5", [ "Color" ], [ ], "None", (col: string) => {
-    console.log("func5(" + col + ")");
-});
-client.addValue("val1", "String", "", (val: string) => {
-    console.log("val1 = \"" + val + "\"");
-});
-client.addValue("val2", "Number", 0, (val: number) => {
-    console.log("val2 = " + val);
-});
-let lastVal3 = false;
-client.addValue("val3", "Bool", false, (val: boolean) => {
-    lastVal3 = val;
-    console.log("val3 = " + (val ? "true" : "false"));
-});
-client.addValue("val4", "Color", "#000000", (val: string) => {
-    console.log("val4 = \"" + val + "\"");
-});
+client.addNumberValue("val8", "float", 17.2, true, "hex", (value: number) => {}, [ 0, 1 ]);
+client.addNumberValue("val9", "float", 17.2, true, "decimal", (value: number) => {}, [ 0, 1 ]);
+client.addNumberValue("val10", "float", 17.2, true, "binary", (value: number) => {}, [ 0, 1 ]);
+client.addNumberValue("val11", "float", 17.2, true, "slider", (value: number) => {}, [ 0, 20 ]);
+client.addNumberValue("val12", "integer", 17, true, "hex", (value: number) => {}, [ 0, 1 ]);
+client.addNumberValue("val13", "integer", 17, true, "decimal", (value: number) => {}, [ 0, 1 ]);
+client.addNumberValue("val14", "integer", 17, true, "binary", (value: number) => {}, [ 0, 1 ]);
+client.addNumberValue("val15", "integer", 17, true, "slider", (value: number) => {}, [ 0, 20 ]);
 client.start();
 client.setOnConnect(async () => {
     /* setInterval(() => {

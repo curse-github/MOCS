@@ -1,25 +1,56 @@
-export type parameterType = {
-    type: "String"|"Number"|"Bool"|"Color",
-    defaultValue?: string|number|boolean
+type colorType = `#${string}`;
+type parameterType = {
+    type: "string",
+    defaultValue: string
+}|{
+    type: "bool",
+    defaultValue: boolean
+}|{
+    type: "float"|"integer",
+    defaultValue: number,
+    range?: [ number, number ],
+    displayType: "normal"|"slider"
+}|{
+    type: "color",
+    defaultValue: colorType
 };
-export type functionType = {
-    name: string,
-    overloads: {
-        visible: boolean,
-        parameters: parameterType[],
-        returnType: "String"|"Number"|"Bool"|"Color"|"None"
-    }[]
+type overloadType = {
+    visible: boolean,
+    parameters: parameterType[],
+    returnType: "string"|"float"|"integer"|"bool"|"color"|"none"
 };
-export type valueType = {
+type functionType = {
     name: string,
-    type: "String"|"Number"|"Bool"|"Color",
-    value: any
+    overloads: overloadType[]
 };
-export type deviceType = {
+type valueType = {
     name: string,
-    functions?: functionType[],
-    values?: valueType[],
-    children?: deviceType[]
+    type: "string",
+    value: string,
+    readonly: boolean
+}|{
+    name: string,
+    type: "float"|"integer",
+    value: number,
+    readonly: boolean,
+    range?: [ number, number ],
+    displayType: "hex"|"decimal"|"binary"|"slider"
+}|{
+    name: string,
+    type: "bool",
+    value: boolean,
+    readonly: boolean
+}|{
+    name: string,
+    type: "color",
+    value: colorType,
+    readonly: boolean
+};
+type deviceType = {
+    name: string,
+    functions: functionType[],
+    values: valueType[],
+    children: deviceType[]
 };
 
 export class ClientBase {
@@ -30,7 +61,8 @@ export class ClientBase {
         values: [],
         children: []
     };
-    private funcNameToCallback: {[name: string]: ((...params: any[])=> void)} = {};
+    public funcNameToCallback: {[name: string]: ((...params: any[])=> any)[]} = {};
+
     constructor(_name: string) {
         this.self.name = _name;
     }
@@ -63,9 +95,13 @@ export class ClientBase {
         }
         this.callQueue = [];
     }
-    protected onCall(commands: { func: string, parameters: any[] }[], returnId: string) {
+    protected onCall(commands: { func: string, overload: number, parameters: any[] }[], returnId: string) {
         // get return value of each call and
-        const returnVals: any[] = commands.map(({ func, parameters }: { func: string, parameters: any[] }) => this.funcNameToCallback[func](...parameters));
+        const returnVals: any[] = commands.map(
+            ({ func, overload, parameters }: { func: string, overload: number, parameters: any[] }): any => {
+                return this.funcNameToCallback[func][overload](...parameters);
+            }
+        );
         this.returnValue(returnId, returnVals);
     }
     private started: boolean = false;
@@ -88,30 +124,56 @@ export class ClientBase {
         }
         return this.sendCmd(cmd);
     }
-    public addFunction(name: string, params: ("String"|"Number"|"Bool"|"Color")[], defaultValues: any[], returnType: "String"|"Number"|"Bool"|"Color"|"None", callback: (...params: any[])=> any) {
+    public addFunction(name: string): ClientBase.FunctionClass|undefined {
         if (this.started) return;
-        this.self.functions!.push({
+        const obj: functionType = {
             name,
-            overloads: [
-                {
-                    visible: true,
-                    parameters: params.map((type: "String"|"Number"|"Bool"|"Color", index: number) => {
-                        return { type, defaultValue: defaultValues[index] };
-                    }),
-                    returnType
-                }
-            ]
-        });
-        this.funcNameToCallback[name] = callback;
+            overloads: []
+        };
+        this.self.functions!.push(obj);
+        return new ClientBase.FunctionClass(this, obj);
     }
-    public addValue(name: string, type: ("String"|"Number"|"Bool"|"Color"), value: any, setter: ((value: any)=> void) | ((value: string)=> void) | ((value: number)=> void) | ((value: boolean)=> void)) {
+    public addStringValue(name: string, value: string, readonly: boolean, setter: (value: any)=> void) {
+        if (this.started) return;
+        this.self.values!.push({
+            name,
+            type: "string",
+            value,
+            readonly
+        });
+        if (!readonly) this.funcNameToCallback[name + ".set"] = [ setter ];
+    }
+    public addNumberValue(name: string, type: "float"|"integer", value: number, readonly: boolean, displayType: "hex"|"decimal"|"binary"|"slider", setter: (value: number)=> void, range?: [ number, number ]) {
         if (this.started) return;
         this.self.values!.push({
             name,
             type,
-            value
+            value,
+            readonly,
+            range,
+            displayType
         });
-        this.funcNameToCallback[name + ".set"] = setter;
+        if (!readonly) this.funcNameToCallback[name + ".set"] = [ setter ];
+    }
+    public addBooleanValue(name: string, value: boolean, readonly: boolean, setter: (value: boolean)=> void) {
+        if (this.started) return;
+        this.self.values!.push({
+            name,
+            type: "bool",
+            value,
+            readonly
+        });
+        if (!readonly) this.funcNameToCallback[name + ".set"] = [ setter ];
+    }
+    public addColorValue(name: string, value: colorType, readonly: boolean, setter: (value: colorType)=> void) {
+        if (this.started) return;
+        this.self.values!.push({
+            name,
+            type: "color",
+            value,
+            readonly
+        });
+        if (!readonly) this.funcNameToCallback[name + ".set"] = [ setter ];
     }
     public updateValue(name: string, value: any) {
         if (!this.started) return;
@@ -145,5 +207,79 @@ export class ClientBase {
     }
     protected actuallyUpdateValue(name: string, value: any) {
         console.error("Not Implemented Yet.");
+    }
+}
+export namespace ClientBase {
+    export class FunctionClass {
+        private client: ClientBase;
+        private function: functionType;
+        constructor(_client: ClientBase, _function: functionType) {
+            this.client = _client;
+            this.function = _function;
+        }
+        public addOverload(
+            visible: boolean,
+            returnType: "string"|"float"|"integer"|"bool"|"color"|"none",
+            callback: (...params: any[])=> any
+        ): ClientBase.FunctionClass.Overload {
+            this.client.funcNameToCallback[this.function.name] ||= [];
+            this.client.funcNameToCallback[this.function.name].push(callback);
+            const overload: overloadType = {
+                visible,
+                parameters: [],
+                returnType
+            };
+            this.function.overloads.push(overload);
+            return new ClientBase.FunctionClass.Overload(overload);
+        }
+    }
+    export namespace FunctionClass {
+        export class Overload {
+            private overload: overloadType;
+            constructor(_overload: overloadType) {
+                this.overload = _overload;
+            }
+            public addStringParameter(
+                defaultValue: string
+            ): ClientBase.FunctionClass.Overload {
+                this.overload.parameters.push({
+                    type: "string",
+                    defaultValue
+                });
+                return this;
+            }
+            public addNumberParameter(
+                type: "float"|"integer",
+                defaultValue: number,
+                displayType: "normal"|"slider",
+                range?: [ number, number ]
+            ): ClientBase.FunctionClass.Overload {
+                this.overload.parameters.push({
+                    type,
+                    defaultValue,
+                    range,
+                    displayType
+                });
+                return this;
+            }
+            public addBoolParameter(
+                defaultValue: boolean
+            ): ClientBase.FunctionClass.Overload {
+                this.overload.parameters.push({
+                    type: "bool",
+                    defaultValue
+                });
+                return this;
+            }
+            public addColorParameter(
+                defaultValue: colorType
+            ): ClientBase.FunctionClass.Overload {
+                this.overload.parameters.push({
+                    type: "color",
+                    defaultValue
+                });
+                return this;
+            }
+        }
     }
 }

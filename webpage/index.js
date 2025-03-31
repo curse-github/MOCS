@@ -41,6 +41,7 @@ function processDevice(parent, parentName, device) {
         for (let i = 0; i < device.functions.length; i++) {
             const func = device.functions[i];
             for (let j = 0; j < func.overloads.length; j++) {
+                if (!func.overloads[j].visible) continue;
                 const paramObjs = func.overloads[j].parameters;
                 addInput(parent, "button", parentName + device.name + "." + func.name, () => {
                     let cmd = parentName + device.name + "." + func.name + "(";
@@ -48,16 +49,19 @@ function processDevice(parent, parentName, device) {
                         const paramObj = paramObjs[k];
                         if (k > 0) cmd += ", ";
                         switch (paramObj.type) {
-                            case "String":
+                            case "string":
                                 cmd += "\"" + document.getElementById(parentName + device.name + "." + func.name + "." + k).value + "\"";
                                 break;
-                            case "Number":
+                            case "float":
+                                cmd += document.getElementById(parentName + device.name + "." + func.name + "." + k).value * ((paramObj.displayType === "slider") ? (1/100) : 1);
+                                break;
+                            case "integer":
                                 cmd += document.getElementById(parentName + device.name + "." + func.name + "." + k).value;
                                 break;
-                            case "Bool":
+                            case "bool":
                                 cmd += document.getElementById(parentName + device.name + "." + func.name + "." + k).checked ? "true" : "false";
                                 break;
-                            case "Color":
+                            case "color":
                                 cmd += "\"" + document.getElementById(parentName + device.name + "." + func.name + "." + k).value.toUpperCase() + "\"";
                                 break;
                             default:
@@ -72,20 +76,37 @@ function processDevice(parent, parentName, device) {
                 for (let k = 0; k < paramObjs.length; k++) {
                     const paramObj = paramObjs[k];
                     let el = undefined;
+                    let type = "";
                     switch (paramObj.type) {
-                        case "String":
+                        case "string":
                             el = addInput(parent, "text", parentName + device.name + "." + func.name + "." + k, () => {});
                             el.value = paramObj.defaultValue;
                             break;
-                        case "Number":
-                            el = addInput(parent, "number", parentName + device.name + "." + func.name + "." + k, () => {});
+                        case "float":
+                            type = "number";
+                            if (paramObj.displayType == "slider") type = "range";
+                            el = addInput(parent, type, parentName + device.name + "." + func.name + "." + k, () => {});
+                            if (paramObj.range != undefined) {
+                                el.setAttribute("min", paramObj.range[0]*100);
+                                el.setAttribute("max", paramObj.range[1]*100);
+                            }
+                            el.value = paramObj.defaultValue * ((paramObj.displayType === "slider") ? 100 : 1);
+                            break;
+                        case "integer":
+                            type = "number";
+                            if (paramObj.displayType == "slider") type = "range";
+                            el = addInput(parent, type, parentName + device.name + "." + func.name + "." + k, () => {});
+                            if (paramObj.range != undefined) {
+                                el.setAttribute("min", paramObj.range[0]);
+                                el.setAttribute("max", paramObj.range[1]);
+                            }
                             el.value = paramObj.defaultValue;
                             break;
-                        case "Bool":
+                        case "bool":
                             el = addInput(parent, "checkbox", parentName + device.name + "." + func.name + "." + k, () => {});
                             el.checked = paramObj.defaultValue;
                             break;
-                        case "Color":
+                        case "color":
                             el = addInput(parent, "color", parentName + device.name + "." + func.name + "." + k, () => {});
                             el.value = paramObj.defaultValue.toLowerCase();
                             break;
@@ -112,8 +133,9 @@ function processDevice(parent, parentName, device) {
                 console.log(cmd+" => " + JSON.stringify(returnVal));
             });
             }
+            let type = "";
             switch (value.type) {
-                case "String":
+                case "string":
                     el = addInput(parent, "text", parentName + device.name + "." + value.name, (data) => {
                         if (!value.readonly) callAndPrint("\"" + data + "\"");
                     });
@@ -122,16 +144,55 @@ function processDevice(parent, parentName, device) {
                     };
                     el.value = value.value;
                     break;
-                case "Number":
-                    el = addInput(parent, "number", parentName + device.name + "." + value.name, (data) => {
+                case "float":
+                    type = "number";
+                    if ((value.displayType == "hex") || (value.displayType == "binary")) type = "text";
+                    if (value.displayType == "slider") type = "range";
+                    el = addInput(parent, type, parentName + device.name + "." + value.name, (data) => {
+                        if (value.readonly) return;
+                        if (value.displayType == "slider")
+                            callAndPrint(data/100);
+                        else
+                            callAndPrint(data);
+                    });
+                    if (value.range != undefined) {
+                        el.setAttribute("min", value.range[0]*100);
+                        el.setAttribute("max", value.range[1]*100);
+                    }
+                    updateCallbacks[parentName + device.name + "." + value.name] = (newValue) => {
+                        if (value.displayType == "hex")
+                            el.value = "0x" + newValue.toString(16).toUpperCase();
+                        else if (value.displayType == "binary")
+                            el.value = "0b" + newValue.toString(2);
+                        else if (value.displayType == "slider")
+                            el.value = newValue * 100;
+                        else
+                            el.value = newValue;
+                    };
+                    updateCallbacks[parentName + device.name + "." + value.name](value.value);
+                    break;
+                case "integer":
+                    type = "number";
+                    if ((value.displayType == "hex") || (value.displayType == "binary")) type = "text";
+                    if (value.displayType == "slider") type = "range";
+                    el = addInput(parent, type, parentName + device.name + "." + value.name, (data) => {
                         if (!value.readonly) callAndPrint(data);
                     });
+                    if (value.range != undefined) {
+                        el.setAttribute("min", value.range[0]);
+                        el.setAttribute("max", value.range[1]);
+                    }
                     updateCallbacks[parentName + device.name + "." + value.name] = (newValue) => {
-                        el.value = newValue;
+                        if (value.displayType == "hex")
+                            el.value = "0x" + newValue.toString(16).toUpperCase();
+                        else if (value.displayType == "binary")
+                            el.value = "0b" + newValue.toString(2);
+                        else
+                            el.value = newValue;
                     };
-                    el.value = value.value;
+                    updateCallbacks[parentName + device.name + "." + value.name](value.value);
                     break;
-                case "Bool":
+                case "bool":
                     el = addInput(parent, "checkbox", parentName + device.name + "." + value.name, (data) => {
                         if (!value.readonly) callAndPrint((data ? "true" : "false"));
                     });
@@ -140,7 +201,7 @@ function processDevice(parent, parentName, device) {
                     };
                     el.checked = value.value;
                     break;
-                case "Color":
+                case "color":
                     el = addInput(parent, "color", parentName + device.name + "." + value.name, (data) => {
                         if (!value.readonly) callAndPrint("\"" + data.toUpperCase() + "\"");
                     });

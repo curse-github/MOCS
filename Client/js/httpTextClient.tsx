@@ -1,4 +1,4 @@
-import { parameterType, functionType, valueType, deviceType, ClientBase } from "./ClientBase.jsx";
+import { ClientBase } from "./ClientBase.jsx";
 import fetch from "node-fetch";
 
 async function httpReq(hostname: string, method: "GET"|"POST", body: string|undefined): Promise<string> {
@@ -59,7 +59,7 @@ class HttpTextClient extends ClientBase {
                         let parameters: any = lineSplt[1].split(")")[0];
                         if (parameters.split(",")[0] == "") parameters = [];// has no paramters
                         else parameters = parameters.split(",").map((str: string) => JSON.parse(str.trim()));
-                        this.onCall([ { func, parameters } ], "");
+                        this.onCall([ { func, overload: 0, parameters } ], "");
                     });
                 }
             }).bind(this));
@@ -87,8 +87,9 @@ class HttpTextClient extends ClientBase {
 
 const name: string = "HttpTextDevice";
 const client: HttpTextClient = new HttpTextClient(name);
-client.addFunction("func1", [], [], "None", () => {
-    console.log("func1()");
-});
+client.addFunction("func1")!
+    .addOverload(true, "none", () => {
+        console.log("func1()");
+    });
 client.start();
 client.setOnConnect(async () => {});

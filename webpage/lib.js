@@ -101,6 +101,7 @@ async function call(cmd) {
     const returnVal = await (new Promise((resolve) => {
         returnIdToCallback[returnId] = resolve;
     }));
-    if (returnVal == "None") return undefined;
+    console.log(returnVal);
+    if (returnVal == "none") return undefined;
     else return JSON.parse(returnVal);
 }

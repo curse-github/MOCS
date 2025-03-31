@@ -1,4 +1,4 @@
-import { parameterType, functionType, valueType, deviceType, ClientBase } from "./ClientBase.jsx";
+import { ClientBase } from "./ClientBase.jsx";
 import fetch from "node-fetch";
 
 async function httpReqJson(hostname: string, method: "GET"|"POST", body: string|undefined): Promise<string> {
@@ -110,8 +110,9 @@ class HttpJsonClient extends ClientBase {
 
 const name: string = "HttpJsonDevice";
 const client: HttpJsonClient = new HttpJsonClient(name);
-client.addFunction("func1", [], [], "None", () => {
-    console.log("func1()");
-});
+client.addFunction("func1")!
+    .addOverload(true, "none", () => {
+        console.log("func1()");
+    });
 client.start();
 client.setOnConnect(async () => {});

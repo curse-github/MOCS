@@ -1,7 +1,5 @@
 #include <string>
 #include <vector>
-#include <sstream>
-#include <iomanip>
 
 struct updateValueStr {
   std::string name;
@@ -29,7 +27,7 @@ bool isMocsActive = false;
 const char *ip = "192.168.0.105";
 const char *ssid = "CurseNet24";
 const char *password = "simpsoncentral";
-const char *self = "{\"name\":\"ESP8266\",\"values\":[{\"name\":\"fan\",\"type\":\"Bool\",\"value\":true,\"readonly\":false},{\"name\":\"ir\",\"type\":\"String\",\"value\":\"\",\"readonly\":true}]}";
+const char *self = "{\"name\":\"ESP8266\",\"functions\":[{\"name\":\"toggle\",\"overloads\":[{\"visible\":false,\"parameters\":[],\"returnType\":\"none\"}]}],\"values\":[{\"name\":\"fan\",\"type\":\"bool\",\"value\":true,\"readonly\":false},{\"name\":\"ir\",\"type\":\"integer\",\"value\":0,\"readonly\":true,\"displayType\":\"hex\"}],\"children\":[]}";
 std::string connectionId = "";
 unsigned long lastKeepAliveTime = 0;
 WaitingOnEnum waitingOn = WaitingOnEnum::None;
@@ -44,6 +42,10 @@ void setup() {
 void handleCmd(const std::string &cmd) {
   if (cmd.substr(0,8) == "fan.set(")
     setState(cmd[8] == 't');
+  else if (cmd.substr(0,7) == "toggle(") {
+    bool newState = toggle();
+    updateQueue.push_back({ "fan",0,newState });
+  }
 }
 std::string workingStr = "";
 void executeUpdateValue(const updateValueStr &str) {
@@ -55,9 +57,7 @@ void executeUpdateValue(const updateValueStr &str) {
   if (str.name[0]=='f') {
     workingStr += (str.valueBool?"true":"false");
   } else if (str.name[0]=='i') {
-    std::stringstream ss;
-    ss << "0x" << std::hex << std::uppercase << str.valueNum;
-    workingStr += "\"" + ss.str() + "\"";
+    workingStr += std::to_string(str.valueNum);
   } else return;
   workingStr += '}';
   waitingOn = WaitingOnEnum::Generic;

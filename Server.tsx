@@ -127,6 +127,9 @@ function sha256(ascii: any) {
     }
     return result;
 }
+function getCookies(req: Request): { [key: string]: string } {
+    return ((req.headers.cookie == undefined) ? {} : (Object.fromEntries(req.headers.cookie!.split(";").map((el) => (el.trim().split("=").map(decodeURIComponent))))));
+}
 
 class ExpressWrapper {
     private app: Application;
@@ -158,15 +161,11 @@ class ExpressWrapper {
         });
     }
 }
-export function getCookies(req: Request): { [key: string]: string } {
-    return ((req.headers.cookie == undefined) ? {} : (Object.fromEntries(req.headers.cookie!.split(";").map((el) => (el.trim().split("=").map(decodeURIComponent))))));
-}
-
 class WebsocketServerWrapper {
     private wss: WebSocketServer;
     private onConnection: ((connectionKey: string)=> void)|undefined = undefined;
     private onClose: ((connectionKey: string)=> void)|undefined = undefined;
-    private msgMode: "None"|"Msg"|"Str"|"Json" = "None";
+    private msgMode: "none"|"Msg"|"Str"|"Json" = "none";
     private onMessage: ((connectionKey: string, data: RawData)=> void)|undefined = undefined;
     private onString: ((connectionKey: string, data: string)=> void)|undefined = undefined;
     private onJson: ((connectionKey: string, data: any)=> void)|undefined = undefined;
@@ -324,7 +323,7 @@ class WebsocketServerWrapper {
                                     console.log("unknown error:", error);
                                 }
                             }
-                        case "None":
+                        case "none":
                         default:
                             break;
                     }
@@ -346,29 +345,59 @@ class WebsocketServerWrapper {
 // #endregion helpers
 
 // #region types
+type colorType = `#${string}`;
 type parameterType = {
-    type: "String"|"Number"|"Bool"|"Color",
-    defaultValue?: string|number|boolean
+    type: "string",
+    defaultValue: string
+}|{
+    type: "bool",
+    defaultValue: boolean
+}|{
+    type: "float"|"integer",
+    defaultValue: number,
+    range?: [ number, number ],
+    displayType: "normal"|"slider"
+}|{
+    type: "color",
+    defaultValue: colorType
 };
-export type functionType = {
+type overloadType = {
+    visible: boolean,
+    parameters: parameterType[],
+    returnType: "string"|"float"|"integer"|"bool"|"color"|"none"
+};
+type functionType = {
     name: string,
-    overloads: {
-        visible: boolean,
-        parameters: parameterType[],
-        returnType: "String"|"Number"|"Bool"|"Color"|"None"
-    }[]
+    overloads: overloadType[]
 };
 type valueType = {
     name: string,
-    type: "String"|"Number"|"Bool"|"Color",
-    value: any,
+    type: "string",
+    value: string,
+    readonly: boolean
+}|{
+    name: string,
+    type: "float"|"integer",
+    value: number,
+    readonly: boolean,
+    range?: [ number, number ],
+    displayType: "hex"|"decimal"|"binary"|"slider"
+}|{
+    name: string,
+    type: "bool",
+    value: boolean,
+    readonly: boolean
+}|{
+    name: string,
+    type: "color",
+    value: colorType,
     readonly: boolean
 };
 type deviceType = {
     name: string,
-    functions?: functionType[],
-    values?: valueType[],
-    children?: deviceType[]
+    functions: functionType[],
+    values: valueType[],
+    children: deviceType[]
 };
 
 type notifSubType = {
@@ -390,12 +419,11 @@ type userType = {
 // #endregion types
 
 // #region type validation functions
-function verifyParamOfType(param: string, paramFormat: "String" | "Number" | "Bool" | "Color"): [ boolean, any ] {
+function verifyValueOfType(param: string, paramFormat: "string"|"float"|"integer"|"bool"|"color"): [ boolean, string|boolean|number|undefined ] {
     if (param.length === 0) return [ false, undefined ];// empty string is not valid for any type
-    param = param.trim();
-    if (paramFormat != "String") param = param.toLowerCase();
+    param = param.trim().toLowerCase();
     switch (paramFormat) {
-        case "String":
+        case "string":
             if (
                 ((param[0] === "\"") && (param[param.length - 1] === "\""))
                 || ((param[0] === "'") && (param[param.length - 1] === "'"))
@@ -404,11 +432,15 @@ function verifyParamOfType(param: string, paramFormat: "String" | "Number" | "Bo
                 return [ true, param.substring(1, param.length - 1) ];
             }
             break;
-        case "Number":
+        case "integer":
+        case "float":
             let paramParseNumNum: number = Number(param);
             if (paramParseNumNum.toString() === param) {
                 // succesfully parsed as a number
-                return [ true, paramParseNumNum ];
+                if (paramFormat == "integer") {
+                    if (Number.isInteger(paramParseNumNum)) return [ true, paramParseNumNum ];
+                    else return [ false, undefined ];
+                } else return [ true, paramParseNumNum ];
             } else if (
                 ((param[0] === "\"") && (param[param.length - 1] === "\""))
                 || ((param[0] === "'") && (param[param.length - 1] === "'"))
@@ -419,11 +451,14 @@ function verifyParamOfType(param: string, paramFormat: "String" | "Number" | "Bo
                 paramParseNumNum = Number(paramParseNumStr);
                 if (paramParseNumNum.toString() === paramParseNumStr) {
                     // succesfully parsed as the string of a number
-                    return [ true, paramParseNumNum ];
+                    if (paramFormat == "integer") {
+                        if (Number.isInteger(paramParseNumNum)) return [ true, paramParseNumNum ];
+                        else return [ false, undefined ];
+                    } else return [ true, paramParseNumNum ];
                 }
             }
             break;
-        case "Bool":
+        case "bool":
             if (param === "true") {
                 // succesfully parsed as boolean
                 return [ true, true ];
@@ -446,7 +481,7 @@ function verifyParamOfType(param: string, paramFormat: "String" | "Number" | "Bo
                 }
             }
             break;
-        case "Color":
+        case "color":
             if (
                 ((param[0] === "\"") && (param[param.length - 1] === "\""))
                 || ((param[0] === "'") && (param[param.length - 1] === "'"))
@@ -469,81 +504,85 @@ function verifyParamOfType(param: string, paramFormat: "String" | "Number" | "Bo
     }
     return [ false, undefined ];
 }
-function verifyReturnOfType(returnVal: any, returnType: "String" | "Number" | "Bool" | "Color" | "None"): [ boolean, any ] {
-    if (returnType === "None") {
-        if (returnVal == undefined) return [ true, "None" ];
+function verifyValueOfTypeOrNone(returnVal: any, returnType: "string"|"float"|"integer"|"bool"|"color"|"none"): [ boolean, any ] {
+    if (returnType === "none") {
+        if (returnVal == undefined) return [ true, "none" ];
         return [ false, undefined ];
     } else {
-        return verifyParamOfType(JSON.stringify(returnVal), returnType);
+        return verifyValueOfType(JSON.stringify(returnVal), returnType);
     }
 }
 function verifyParameter(param: parameterType): [ boolean, string ] {
-    if ((typeof param) != "object") return [ false, "Parameter specification is not of type object." ];
-    if (
-        (param.type !== "String") && (param.type !== "Number") && (param.type !== "Bool") && (param.type !== "Color")
-    ) return [ false, "" ];
-    if (param.defaultValue == undefined) {
-        switch (param.type) {
-            case "String":
-                param.defaultValue = "";
-                break;
-            case "Number":
-                param.defaultValue = 0;
-                break;
-            case "Bool":
-                param.defaultValue = false;
-                break;
-            case "Color":
-                param.defaultValue = "#000000";
-                break;
-            default:
-                break;
+    if ((typeof param) !== "object") return [ false, "Parameter specification is not of type object." ];
+    if ((typeof param.type) !== "string") return [ false, "Parameter type value is of incorrect type." ];
+    if (![ "string", "float", "integer", "bool", "color" ].includes(param.type.toLowerCase())) return [ false, "Invalid parameter type value." ];
+    param.type = param.type.toLowerCase() as ("string"|"bool"|"float"|"integer"|"color");
+    if ((param.type === "float") || (param.type === "integer")) {
+        if (param.range != undefined) {
+            if ((typeof param.range) != "object") return [ false, "Parameter range value is of incorrect type." ];
+            if (!Array.isArray(param.range)) return [ false, "Parameter range value must be an array." ];
+            if (param.range.length as number !== 2) return [ false, "Parameter range value must have a length of 2." ];
+            if (((typeof param.range[0]) != "number") || ((typeof param.range[1]) != "number")) return [ false, "Parameter range value must contain two numbers." ];
+            if (param.range[1] <= param.range[0]) return [ false, "Parameter range maximum value must be larger than min." ];
+        } else {
+            if (param.displayType.toLowerCase() == "slider") return [ false, "Parameter must have range value if display type is slider." ];
         }
-    } else {
-        const [ verified, validValue ] = verifyParamOfType(JSON.stringify(param.defaultValue), param.type);
-        if (!verified) return [ false, "Parameter default value to not match paramter type " + param.type + "." ];
-        param.defaultValue = validValue;
+        if ((typeof param.displayType) !== "string") return [ false, "Parameter display type value is of incorrect type." ];
+        if (![ "normal", "slider" ].includes(param.displayType.toLowerCase())) return [ false, "Invalid parameter display type value." ];
+        param.displayType = param.displayType.toLowerCase() as "normal"|"slider";
     }
+    const [ verified, validValue ] = verifyValueOfType(JSON.stringify(param.defaultValue), param.type);
+    if (!verified) return [ false, "Parameter default value to not match paramter type " + param.type + "." ];
+    param.defaultValue = validValue!;
     return [ true, "" ];
 }
-function verifyOverload(overload: {visible: boolean, parameters: parameterType[], returnType: "String"|"Number"|"Bool"|"Color"|"None"}): [ boolean, string ] {
-    if ((typeof overload) != "object") return [ false, "Overload specification is not of type object." ];
-    if ((overload.visible !== true) && (overload.visible !== false)) return [ false, "Overload visible value is missing or has an invalid type." ];
+function verifyOverload(overload: overloadType): [ boolean, string ] {
+    if ((typeof overload) !== "object") return [ false, "Overload specification is not of type object." ];
+    if ((typeof overload.visible) !== "boolean") return [ false, "Overload visible value is missing or has an invalid value." ];
     const invalidParameterReasons: string[] = overload.parameters.map(verifyParameter).filter(([ valid ]: [ boolean, string ]) => !valid).map(([ valid, reason ]: [ boolean, string ]) => reason);
     if (invalidParameterReasons.length > 0) return [ false, invalidParameterReasons.join(", ") ];
-    switch (overload.returnType) {
-        case "String":
-        case "Number":
-        case "Bool":
-        case "Color":
-        case "None":
-            return [ true, "" ];
-        default:
-            return [ false, "Overload return type unknown." ];
-    }
+    if ((typeof overload.returnType) !== "string") return [ false, "Overload return type value is of incorrect type." ];
+    if (![ "string", "bool", "float", "integer", "color", "none" ].includes(overload.returnType.toLowerCase())) return [ false, "Invalid overload return type value." ];
+    overload.returnType = overload.returnType.toLowerCase() as "string"|"float"|"integer"|"bool"|"color"|"none";
+    return [ true, "" ];
 }
 function verifyFunction(func: functionType): [ boolean, string ] {
-    if ((typeof func) != "object") return [ false, "Function specification is not of type object." ];
-    if ((typeof func.name) != "string") return [ false, "Function name value is of invalid type." ];
-    if (func.name === "") return [ false, "Function name cannot be empty." ];
+    if ((typeof func) !== "object") return [ false, "Function specification is not of type object." ];
+    if ((typeof func.name) !== "string") return [ false, "Function name value is of invalid type." ];
+    if (func.name.length == 0) return [ false, "Function name cannot be empty." ];
     if ((func.name === "get") || (func.name === "set")) return [ false, "Function name cannot \"get\" or \"set\"." ];
     const invalidOverloadReasons: string[] = func.overloads.map(verifyOverload).filter(([ valid ]: [ boolean, string ]) => !valid).map(([ valid, reason ]: [ boolean, string ]) => reason);
     if (invalidOverloadReasons.length > 0) return [ false, invalidOverloadReasons.join(", ") ];
     return [ true, "" ];
 }
 function verifyValue(value: valueType): [ boolean, string ] {
-    if ((typeof value) != "object") return [ false, "Value specification is not of type object" ];
-    if ((typeof value.name) != "string") return [ false, "Value name value is of invalid type." ];
-    if (value.name === "") return [ false, "Value name cannot be empty." ];
-    if (value.name.endsWith("Get") || value.name.endsWith("Set")) return [ false, "Value name cannot end in \"Get\" or \"Set\"." ];
-    if (
-        (value.type !== "String") && (value.type !== "Number") && (value.type !== "Bool") && (value.type !== "Color")
-    ) return [ false, "Value type is unknown." ];
-    
-    const [ verified, validValue ] = verifyParamOfType(JSON.stringify(value.value), value.type);
-    if (!verified) return [ false, "Value value field does not match type." ];
-    value.value = validValue;
+    if ((typeof value) !== "object") return [ false, "Value specification is not of type object" ];
+    if ((typeof value.name) !== "string") return [ false, "Value name value is of invalid type." ];
+    if (value.name.length == 0) return [ false, "Value name cannot be empty." ];
+    if ((typeof value.type) !== "string") return [ false, "Value type value is of incorrect type." ];
+    if (![ "string", "float", "integer", "bool", "color" ].includes(value.type.toLowerCase())) return [ false, "Invalid value type value." ];
+    value.type = value.type.toLowerCase() as ("string"|"bool"|"float"|"integer"|"color");
     if ((typeof value.readonly) != "boolean") return [ false, "Value readonly must be boolean" ];
+    if ((value.type === "float") || (value.type === "integer")) {
+        if (value.range != undefined) {
+            if ((typeof value.range) != "object") return [ false, "Value range value is of incorrect type." ];
+            if (!Array.isArray(value.range)) return [ false, "Value range value must be an array." ];
+            if (value.range.length as number !== 2) return [ false, "Value range value must have a length of 2." ];
+            if (((typeof value.range[0]) != "number") || ((typeof value.range[1]) != "number")) return [ false, "Value range value must contain two numbers." ];
+            if (value.range[1] <= value.range[0]) return [ false, "Value range maximum value must be larger than min." ];
+        } else {
+            if (value.displayType.toLowerCase() == "slider") return [ false, "Value must have range value if display type is slider." ];
+        }
+        if ((typeof value.displayType) !== "string") return [ false, "Value display type value is of incorrect type." ];
+        if (![ "hex", "decimal", "binary", "slider" ].includes(value.displayType.toLowerCase())) return [ false, "Invalid value display type value." ];
+        if ([ "hex", "binary" ].includes(value.displayType.toLowerCase())) {
+            if (!value.readonly) return [ false, "Value must be readonly if display type is hex or binary." ];
+        }
+        value.displayType = value.displayType.toLowerCase() as "hex"|"decimal"|"binary"|"slider";
+    }
+    const [ verified, validValue ] = verifyValueOfType(JSON.stringify(value.value), value.type);
+    if (!verified) return [ false, "Value value field does not match type." ];
+    value.value = validValue!;
     return [ true, "" ];
 }
 function verifyDevice(device: deviceType): [ boolean, string ] {
@@ -551,41 +590,44 @@ function verifyDevice(device: deviceType): [ boolean, string ] {
     if ((typeof device.name) != "string") return [ false, "Device name value is of invalid type." ];
     if (device.name === "") return [ false, "Device name cannot be empty." ];
     let hasUse: boolean = false;
-    if (device.functions != undefined) {
-        if (!Array.isArray(device.functions)) return [ false, "Device specification functions element must be either a list or undefined." ];
-        if (device.functions.length != 0) hasUse = true;
-        const invalidFunctionReasons: string[] = device.functions.map(verifyFunction).filter(([ valid ]: [ boolean, string ]) => !valid).map(([ valid, reason ]: [ boolean, string ]) => reason);
-        if (invalidFunctionReasons.length > 0) return [ false, invalidFunctionReasons.join(", ") ];
-        let names: string[] = [];
-        for (let i = 0; i < device.functions.length; i++)
-            if (names.includes(device.functions[i].name))
-                return [ false, "Device specification has duplicate function name." ];
-            else
-                names.push(device.functions[i].name);
+    // devices
+    if ((typeof device.functions) != "object") return [ false, "Device specification functions element is on invalid type." ];
+    if (!Array.isArray(device.functions)) return [ false, "Device specification functions element must be either a list." ];
+    if (device.functions.length != 0) hasUse = true;
+    const invalidFunctionReasons: string[] = device.functions.map(verifyFunction).filter(([ valid ]: [ boolean, string ]) => !valid).map(([ valid, reason ]: [ boolean, string ]) => reason);
+    if (invalidFunctionReasons.length > 0) return [ false, invalidFunctionReasons.join(", ") ];
+    let functionNames: string[] = [];
+    for (let i = 0; i < device.functions.length; i++) {
+        if (functionNames.includes(device.functions[i].name))
+            return [ false, "Device specification has duplicate function name." ];
+        else
+            functionNames.push(device.functions[i].name);
     }
-    if (device.values != undefined) {
-        if (!Array.isArray(device.values)) return [ false, "Device specification values element must be either a list or undefined." ];
-        if (device.values.length != 0) hasUse = true;
-        const invalidValueReasons: string[] = device.values.map(verifyValue).filter(([ valid ]: [ boolean, string ]) => !valid).map(([ valid, reason ]: [ boolean, string ]) => reason);
-        if (invalidValueReasons.length > 0) return [ false, invalidValueReasons.join(", ") ];
-        let names: string[] = [];
-        for (let i = 0; i < device.values.length; i++)
-            if (names.includes(device.values[i].name))
-                return [ false, "Device specification has duplicate value name." ];
-            else
-                names.push(device.values[i].name);
+    // values
+    if ((typeof device.values) != "object") return [ false, "Device specification values element is on invalid type." ];
+    if (!Array.isArray(device.values)) return [ false, "Device specification values element must be either a list." ];
+    if (device.values.length != 0) hasUse = true;
+    const invalidValueReasons: string[] = device.values.map(verifyValue).filter(([ valid ]: [ boolean, string ]) => !valid).map(([ valid, reason ]: [ boolean, string ]) => reason);
+    if (invalidValueReasons.length > 0) return [ false, invalidValueReasons.join(", ") ];
+    let valueNames: string[] = [];
+    for (let i = 0; i < device.values.length; i++) {
+        if (valueNames.includes(device.values[i].name))
+            return [ false, "Device specification has duplicate value name." ];
+        else
+            valueNames.push(device.values[i].name);
     }
-    if (device.children != undefined) {
-        if (!Array.isArray(device.children)) return [ false, "Device specification children element must be either a list or undefined." ];
-        if (device.children.length != 0) hasUse = true;
-        const invalidChildReasons: string[] = device.children.map(verifyDevice).filter(([ valid ]: [ boolean, string ]) => !valid).map(([ valid, reason ]: [ boolean, string ]) => reason);
-        if (invalidChildReasons.length > 0) return [ false, invalidChildReasons.join(", ") ];
-        let names: string[] = [];
-        for (let i = 0; i < device.children.length; i++)
-            if (names.includes(device.children[i].name))
-                return [ false, "Device specification has duplicate child name." ];
-            else
-                names.push(device.children[i].name);
+    // children
+    if ((typeof device.children) != "object") return [ false, "Device specification children is on invalid type." ];
+    if (!Array.isArray(device.children)) return [ false, "Device specification children element must be a list." ];
+    if (device.children.length != 0) hasUse = true;
+    const invalidChildReasons: string[] = device.children.map(verifyDevice).filter(([ valid ]: [ boolean, string ]) => !valid).map(([ valid, reason ]: [ boolean, string ]) => reason);
+    if (invalidChildReasons.length > 0) return [ false, invalidChildReasons.join(", ") ];
+    let childNames: string[] = [];
+    for (let i = 0; i < device.children.length; i++) {
+        if (childNames.includes(device.children[i].name))
+            return [ false, "Device specification has duplicate child name." ];
+        else
+            childNames.push(device.children[i].name);
     }
     if (!hasUse) return [ false, "Device contains no functions, devices, or children." ];
     return [ true, "" ];
@@ -621,7 +663,7 @@ function notifyUser(username: string, header: string, body: string, important: b
     if (user.notifSub == undefined) { console.log("User has not subbed to notifications."); return; }
     webpush.sendNotification(user.notifSub, JSON.stringify({ header, body, important }))
         .then((res: any) => {
-            console.log(res);
+            // console.log(res);
         })
         .catch((error: any) => {
             console.log("Notification push to user \"" + username + "\" failed.", error);
@@ -655,19 +697,19 @@ class ConnectionHandler {
                             visible: true,
                             parameters: [
                                 {
-                                    type: "String",
+                                    type: "string",
                                     defaultValue: "curse"
                                 },
                                 {
-                                    type: "String",
+                                    type: "string",
                                     defaultValue: "header"
                                 },
                                 {
-                                    type: "String",
+                                    type: "string",
                                     defaultValue: "body"
                                 }
                             ],
-                            returnType: "None"
+                            returnType: "none"
                         }
                     ]
                 },
@@ -678,23 +720,25 @@ class ConnectionHandler {
                             visible: true,
                             parameters: [
                                 {
-                                    type: "String",
+                                    type: "string",
                                     defaultValue: "curse"
                                 },
                                 {
-                                    type: "String",
+                                    type: "string",
                                     defaultValue: "header"
                                 },
                                 {
-                                    type: "String",
+                                    type: "string",
                                     defaultValue: "body"
                                 }
                             ],
-                            returnType: "None"
+                            returnType: "none"
                         }
                     ]
                 }
-            ]
+            ],
+            values: [],
+            children: []
         }
     ];
     private localDeviceNameToIndex: {[name: string]: number} = {};
@@ -756,7 +800,7 @@ class ConnectionHandler {
                 Object.entries(this.wsReturnResolves).forEach(([ returnId, [ conKey, resolve ] ]) => {
                     if (conKey === connectionKey) {
                         delete this.wsReturnResolves[returnId];
-                        resolve("None");
+                        resolve("none");
                     }
                 });
                 
@@ -844,7 +888,7 @@ class ConnectionHandler {
                 const device = this.devices[deviceIndex];
                 const value: valueType|undefined = this.getValueObjOnDevice([ device.name ], data.name);
                 if (value == undefined) { console.log("Value with that name was not found."); return; }
-                const [ paramValid, validParamValue ] = verifyParamOfType(JSON.stringify(data.value), value.type);
+                const [ paramValid, validParamValue ] = verifyValueOfType(JSON.stringify(data.value), value.type);
                 if (!paramValid) { console.log("Updated value did not match value type"); return; }
                 if (value.value === validParamValue) return;
                 this.setValueOnDevice([ device.name ], data.name, validParamValue);
@@ -1083,7 +1127,7 @@ class ConnectionHandler {
                     res.status(404).send("<html><body>404 Page Not Found</body></html>");
                 return;
             }
-            const [ paramValid, validParamValue ] = verifyParamOfType(JSON.stringify(req.body.value), value.type);
+            const [ paramValid, validParamValue ] = verifyValueOfType(JSON.stringify(req.body.value), value.type);
             if (!paramValid) {
                 console.error("Parameter passed to setter was invalid.");
                 if (req.headers.accept === "application/json")// client requested json
@@ -1170,6 +1214,7 @@ class ConnectionHandler {
             const sessionId = generateUUID();
             sessionIdToUserName[sessionId] = user.name;
             userNameToSessionId[user.name] = sessionId;
+            // TODO!!!!! actually create a session
             saveDb();
             // set their session id
             res.cookie("sessionid", sessionId, { maxAge: SESSION_LENGTH, httpOnly: false });
@@ -1215,6 +1260,12 @@ class ConnectionHandler {
             if (sessionIdToUserName[cookies.sessionid] == undefined) { res.redirect("/login"); return; }
             const username: string = sessionIdToUserName[cookies.sessionid];
             const { endpoint, keys } = req.body;
+            if (
+                ((typeof endpoint) !== "string")
+                || ((typeof keys) != "object")
+                || ((keys["auth"] == undefined) || ((typeof keys["auth"]) != "string"))
+                || ((keys["p256dh"] == undefined) || ((typeof keys["p256dh"]) != "string"))
+            ) { res.redirect("/login"); return; }
             users[userIndexByName[username]].notifSub = {
                 type: "webpush",
                 endpoint: (endpoint as string),
@@ -1225,7 +1276,7 @@ class ConnectionHandler {
         this.exprs.get("/", (req: Request, res: Response) => { res.redirect("/index"); });
     }
 
-    getFunctionOverloadsOnDevice(devicePath: string[], funcName: string): ["None"|"Local"|"Remote", ({ visible: boolean, parameters: parameterType[], returnType: "String"|"Number"|"Bool"|"Color"|"None" }[])|undefined] {
+    getFunctionOverloadsOnDevice(devicePath: string[], funcName: string): ["None"|"Local"|"Remote", overloadType[]|undefined] {
         if (devicePath.length == 1) {
             let foundDevice: deviceType|undefined = undefined;
             const nextDeviceName = devicePath[0];
@@ -1241,7 +1292,7 @@ class ConnectionHandler {
                 for (let j = 0; j < funcs.length; j++) {
                     const func: functionType = funcs[j];
                     if (func.name === funcName) {
-                        return [ "Remote", func.overloads ];
+                        return [ "Local", func.overloads ];
                     }
                 }
             }
@@ -1344,34 +1395,34 @@ class ConnectionHandler {
     }
     async handleCallCmd({ type, cmd }: {type: "call", cmd: string }): Promise<any> {
         // cmd must have form "device.function(param)" or "device.function()"
-        if ((typeof cmd) !== "string") { console.error("Command is not of type string."); return "None"; }
+        if ((typeof cmd) !== "string") { console.error("Command is not of type string."); return "none"; }
         const splt1: string[] = cmd.split("(");
         // must have something on both sides of a '(', and nothing after the ')'
-        if (splt1.length != 2) { console.error("Command is invalid format."); return "None"; }
+        if (splt1.length != 2) { console.error("Command is invalid format."); return "none"; }
         const [ callSigStr, paramsStr1 ]: [string, string] = splt1 as [string, string];
         const paramsSplt: string[] = paramsStr1.split(")");
-        if (paramsSplt.length != 2) { console.error("Command is invalid format."); return "None"; }
-        if (paramsSplt[1].length != 0) { console.error("Command is invalid format."); return "None"; }
+        if (paramsSplt.length != 2) { console.error("Command is invalid format."); return "none"; }
+        if (paramsSplt[1].length != 0) { console.error("Command is invalid format."); return "none"; }
         const paramsStr2: string = paramsSplt[0];
         // must have at least a single device and function name
         const callSig: string[] = callSigStr.split(".");
-        if (callSig.length < 2) { console.error("Command is invalid format."); return "None"; }
+        if (callSig.length < 2) { console.error("Command is invalid format."); return "none"; }
         const remoteDeviceIndex: number = this.deviceNameToIndex[callSig[0]];// the index of the device
         const localDeviceIndex: number = this.localDeviceNameToIndex[callSig[0]];// the index of the device
-        if ((remoteDeviceIndex == undefined) && (localDeviceIndex == undefined)) { console.error("Command attempted to call function on non-existant device."); return "None"; }
+        if ((remoteDeviceIndex == undefined) && (localDeviceIndex == undefined)) { console.error("Command attempted to call function on non-existant device."); return "none"; }
         // get overloads of the function, or undefined if it does not exist
         const funcName: string = callSig.pop()!;
         if (funcName === "get") {
-            if (callSig.length < 2) { console.error("Command is invalid format."); return "None"; }
+            if (callSig.length < 2) { console.error("Command is invalid format."); return "none"; }
             const value: string = callSig.pop()!;
             return await this.handleGetSetCmd(callSig, value, "get", paramsStr2.split(","));
         } else if (funcName === "set") {
-            if (callSig.length < 2) { console.error("Command is invalid format."); return "None"; }
+            if (callSig.length < 2) { console.error("Command is invalid format."); return "none"; }
             const value: string = callSig.pop()!;
             return await this.handleGetSetCmd(callSig, value, "set", paramsStr2.split(","));
         }
-        const [ functionType, overloads ]: ["None"|"Remote"|"Local", ({ visible: boolean, parameters: parameterType[], returnType: "String"|"Number"|"Bool"|"Color"|"None" }[])|undefined] = this.getFunctionOverloadsOnDevice(callSig, funcName);
-        if (functionType === "None") { console.error("Command attempted to call non-existant function."); return "None"; }
+        const [ functionType, overloads ]: ["None"|"Remote"|"Local", overloadType[]|undefined] = this.getFunctionOverloadsOnDevice(callSig, funcName);
+        if (functionType === "None") { console.error("Command attempted to call non-existant function."); return "none"; }
         assertExists(overloads);
         // check each overload if it is valid for the given parameters
         const params: string[] = paramsStr2.split(",");
@@ -1381,15 +1432,15 @@ class ConnectionHandler {
             // check if every paramter has a valid match to its type in this overload
             let paramsValid: boolean = true;
             for (let j = 0; j < paramsFormat.length; j++) {
-                const [ paramValid, value ] = verifyParamOfType(params[j], paramsFormat[j].type);
+                const [ paramValid, value ] = verifyValueOfType(params[j], paramsFormat[j].type);
                 finalParams.push(value);
                 if (!paramValid) paramsValid = false;
             }
             if (paramsValid) {
-                let returnVal: any = "None";
-                if (functionType == "Remote") {
+                let returnVal: any = "none";
+                if (functionType == "Local") {
                     const func: ((...params: any[])=> void) = this.localDeviceCallbackMap[[ ...callSig, funcName ].join(".")];
-                    if (func == undefined) { console.error("Server error, callback for local function missing."); return "None"; }
+                    if (func == undefined) { console.error("Server error, callback for local function missing."); return "none"; }
                     returnVal = func(finalParams);
                 } else {
                     const key: string|undefined = this.deviceWsConnectionKey[remoteDeviceIndex];
@@ -1424,36 +1475,36 @@ class ConnectionHandler {
                     }
                 }
                 // forward response back to sender
-                const [ isValid, validValue ]: [boolean, string] = verifyReturnOfType(returnVal, overloads[i].returnType);
+                const [ isValid, validValue ]: [boolean, string] = verifyValueOfTypeOrNone(returnVal, overloads[i].returnType);
                 if (isValid) {
-                    if (validValue === "None") return "None";
+                    if (validValue === "none") return "none";
                     else return JSON.stringify(validValue);
-                } else { console.error("Function value returned by callee was invalid"); return "None"; }
+                } else { console.error("Function value returned by callee was invalid"); return "none"; }
             }
         }
-        console.error("No function overload found matching the command"); return "None";
+        console.error("No function overload found matching the command"); return "none";
     }
     async handleGetSetCmd(deviceCallSig: string[], valueName: string, type: "get" | "set", params: string[]): Promise<any> {
         const deviceIndex: number = this.deviceNameToIndex[deviceCallSig[0]];// the index of the device
-        if (deviceIndex == undefined) { console.error("Command attempted to call function on non-existant device."); return "None"; }
+        if (deviceIndex == undefined) { console.error("Command attempted to call function on non-existant device."); return "none"; }
         // get value
         const value: valueType|undefined = this.getValueObjOnDevice(deviceCallSig, valueName);
-        if (value == undefined) { console.error("Command attempted to " + type + " value of non-existant value."); return "None"; }
+        if (value == undefined) { console.error("Command attempted to " + type + " value of non-existant value."); return "none"; }
         // do action based on type
         if (type === "get") {
-            if ((params.length != 0) && !((params.length === 1) && params[0] === "")) { console.error("Getters do not take arguments."); return "None"; }
+            if ((params.length != 0) && !((params.length === 1) && params[0] === "")) { console.error("Getters do not take arguments."); return "none"; }
             return JSON.stringify(value.value);
         } else {
-            if (value.readonly) { console.error("Command attempted to set readonly value."); return "None"; }
-            if (params.length === 0) { console.error("Paramter is required for setter function."); return "None"; }
-            if (params.length > 1) { console.error("Too many parameters were passed for a setter function."); return "None"; }
-            const [ paramValid, validParamValue ] = verifyParamOfType(params[0], value.type);
-            if (!paramValid) { console.error("Parameter passed to setter was invalid."); return "None"; }
-            if (value.value === validParamValue) return "None";// if the value you are setting it to is the same as the current value then dont bother setting it
+            if (value.readonly) { console.error("Command attempted to set readonly value."); return "none"; }
+            if (params.length === 0) { console.error("Paramter is required for setter function."); return "none"; }
+            if (params.length > 1) { console.error("Too many parameters were passed for a setter function."); return "none"; }
+            const [ paramValid, validParamValue ] = verifyValueOfType(params[0], value.type);
+            if (!paramValid) { console.error("Parameter passed to setter was invalid."); return "none"; }
+            if (value.value === validParamValue) return "none";// if the value you are setting it to is the same as the current value then dont bother setting it
             const key: string|undefined = this.deviceWsConnectionKey[deviceIndex];
             const id: string|undefined = this.deviceHttpConnectionIds[deviceIndex];
-            if ((key == undefined) && (id == undefined)) return "None";
-            let returnVal: any = "None";
+            if ((key == undefined) && (id == undefined)) return "none";
+            let returnVal: any = "none";
             this.setValueOnDevice(deviceCallSig, valueName, validParamValue);
             if (key != undefined) {
                 // send data to websocket connection and await response
@@ -1462,6 +1513,7 @@ class ConnectionHandler {
                     type: "call",
                     device: deviceCallSig.slice(1),
                     func: valueName + ".set",
+                    overload: 0,
                     parameters: [ validParamValue ],
                     returnId
                 });
@@ -1474,6 +1526,7 @@ class ConnectionHandler {
                     type: "call",
                     device: deviceCallSig.slice(1),
                     func: valueName + ".set",
+                    overload: 0,
                     parameters: [ validParamValue ]
                 });
                 returnVal = await new Promise<any>((function(this: ConnectionHandler, resolve: (val: any)=> void) {
@@ -1482,11 +1535,11 @@ class ConnectionHandler {
                 }).bind(this));
             }
             // forward response back to sender
-            const [ isValid, validValue ]: [boolean, string] = verifyReturnOfType(returnVal, "None");
+            const [ isValid, validValue ]: [boolean, string] = verifyValueOfTypeOrNone(returnVal, "none");
             if (isValid) {
-                if (validValue === "None") return "None";
+                if (validValue === "none") return "none";
                 else return JSON.stringify(validValue);
-            } else { console.error("Function value returned by callee was invalid"); return "None"; }
+            } else { console.error("Function value returned by callee was invalid"); return "none"; }
         }
     }
     start() {
@@ -1518,12 +1571,12 @@ class ConnectionHandler {
                             delete this.deviceNameToIndex[name];
                             delete this.deviceWsConnectionKey[i];
                             delete this.deviceHttpConnectionIds[i];
-                            console.log(name, " hasnt pinged in " + (((new Date()).getTime() - this.deviceHttpLastPingTime[id]!) / 1000) + "s.");
+                            console.log(name, "hasnt pinged in " + (((new Date()).getTime() - this.deviceHttpLastPingTime[id]!) / 1000) + "s.");
                             delete this.deviceHttpLastPingTime[id];
                             delete this.httpCmdQueue[id];
                             const returnResolveList: ((val: any)=> void)[] = this.httpReturnResolveLists[id];
                             for (let i = 0; i < returnResolveList.length; i++)
-                                returnResolveList[i]("None");
+                                returnResolveList[i]("none");
                             delete this.httpReturnResolveLists[id];
                             
                             for (let i = 0; i < this.deviceWsSubscriptions.length; i++) {
@@ -1548,8 +1601,8 @@ class ConnectionHandler {
                 console.clear();
                 console.log("Server started.");
                 console.log("Wss server on wss://mocs.campbellsimpson.com/ws.");
-                console.log("ws server on ws://localhost:8080/ws.");
                 console.log("Https server on https://mocs.campbellsimpson.com.");
+                console.log("ws server on ws://localhost:8080/ws.");
                 console.log("Http server on http://localhost:8080.");
             });
         });
