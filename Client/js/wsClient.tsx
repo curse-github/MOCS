@@ -55,7 +55,7 @@ class WsClient extends ClientBase {
             this.returnValueResolves[id] = resolve;
         }));
         // parse response and return it
-        if (value == "None") return undefined;
+        if (value == "none") return undefined;
         else return JSON.parse(value);
     }
     protected connect(): void {

@@ -33,7 +33,7 @@ class HttpJsonClient extends ClientBase {
             // send a command to the server and receive the response
             const raw: string = (await postJson("https://mocs.campbellsimpson.com/call", { cmd }));
             const value: any = JSON.parse(raw).value;
-            if (value == "None") return undefined;
+            if (value == "none") return undefined;
             else return JSON.parse(value);
         } catch (error) {
             return undefined;

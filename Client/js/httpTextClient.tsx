@@ -30,7 +30,7 @@ class HttpTextClient extends ClientBase {
     }
     protected async sendCmd(cmd: string): Promise<any> {
         const val: any = await post("https://mocs.campbellsimpson.com/call", { cmd });
-        if (val == "None") return undefined;
+        if (val == "none") return undefined;
         else return JSON.parse(val);
     }
     private connectionId: string = "";
@@ -91,5 +91,6 @@ client.addFunction("func1")!
     .addOverload(true, "none", () => {
         console.log("func1()");
     });
+client.call("ESP8266.toggle()");
 client.start();
 client.setOnConnect(async () => {});

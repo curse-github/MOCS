@@ -58,6 +58,7 @@ function setup() {
                     return;
                 } else if (data.type == "connection") {
                     data.devices.forEach((device) => {
+                        if (device == undefined) return;
                         numConnectedDevices++;
                         const tmpParent = addDiv(containerElement, device.name);
                         tmpParent.className = "device";
