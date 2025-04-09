@@ -4,6 +4,7 @@ import { Application, Request, Response } from "express";// https://www.npmjs.co
 import { readFileSync, writeFileSync } from "fs";
 import * as webpush from "web-push";
 import * as http from "http";
+import * as Spotify from "./Spotify";
 
 // #region helpers
 let config: {[sec: string]: {[key: string]: string}} = {};
@@ -421,7 +422,8 @@ type userType = {
 // #region type validation functions
 function verifyValueOfType(param: string, paramFormat: "string"|"float"|"integer"|"bool"|"color"): [ boolean, string|boolean|number|undefined ] {
     if (param.length === 0) return [ false, undefined ];// empty string is not valid for any type
-    param = param.trim().toLowerCase();
+    if (paramFormat == "string") param = param.trim();
+    else param = param.trim().toLowerCase();
     switch (paramFormat) {
         case "string":
             if (
@@ -651,10 +653,10 @@ for (let i = 0; i < users.length; i++) {
     userIndexByName[user.name] = i;
     userIndexByEmail[user.email] = i;
 }
-const publicKey: string = readFileSync("public-key.txt").toString();
-const privateKey: string = readFileSync("private-key.txt").toString();
+const webpushPublicKey: string = readFileSync("webpush-public-key.txt").toString();
+const webpushPrivateKey: string = readFileSync("webpush-private-key.txt").toString();
 
-webpush.setVapidDetails("mailto:curse@simpsoncentral.com", publicKey, privateKey);
+webpush.setVapidDetails("mailto:curse@simpsoncentral.com", webpushPublicKey, webpushPrivateKey);
 function notifyUser(username: string, header: string, body: string, important: boolean) {
     const index: number|undefined = userIndexByName[username.toLowerCase()];
     if (index == undefined) { console.log("User not found."); return; }
@@ -696,18 +698,9 @@ class ConnectionHandler {
                         {
                             visible: true,
                             parameters: [
-                                {
-                                    type: "string",
-                                    defaultValue: "curse"
-                                },
-                                {
-                                    type: "string",
-                                    defaultValue: "header"
-                                },
-                                {
-                                    type: "string",
-                                    defaultValue: "body"
-                                }
+                                { type: "string", defaultValue: "curse" },
+                                { type: "string", defaultValue: "header" },
+                                { type: "string", defaultValue: "body" }
                             ],
                             returnType: "none"
                         }
@@ -719,19 +712,57 @@ class ConnectionHandler {
                         {
                             visible: true,
                             parameters: [
-                                {
-                                    type: "string",
-                                    defaultValue: "curse"
-                                },
-                                {
-                                    type: "string",
-                                    defaultValue: "header"
-                                },
-                                {
-                                    type: "string",
-                                    defaultValue: "body"
-                                }
+                                { type: "string", defaultValue: "curse" },
+                                { type: "string", defaultValue: "header" },
+                                { type: "string", defaultValue: "body" }
                             ],
+                            returnType: "none"
+                        }
+                    ]
+                }
+            ],
+            values: [],
+            children: []
+        },
+        {
+            name: "spotify",
+            functions: [
+                {
+                    name: "play",
+                    overloads: [
+                        {
+                            visible: true,
+                            parameters: [],
+                            returnType: "none"
+                        }
+                    ]
+                },
+                {
+                    name: "pause",
+                    overloads: [
+                        {
+                            visible: true,
+                            parameters: [],
+                            returnType: "none"
+                        }
+                    ]
+                },
+                {
+                    name: "skipNext",
+                    overloads: [
+                        {
+                            visible: true,
+                            parameters: [],
+                            returnType: "none"
+                        }
+                    ]
+                },
+                {
+                    name: "skipPrevious",
+                    overloads: [
+                        {
+                            visible: true,
+                            parameters: [],
                             returnType: "none"
                         }
                     ]
@@ -749,6 +780,22 @@ class ConnectionHandler {
         },
         "userNotif.notifyImportant": ([ user, header, body ]: any[]) => {
             notifyUser(user as string, header as string, body as string, true);
+            return;
+        },
+        "spotify.play": ([]: any[]) => {
+            Spotify.Start();
+            return;
+        },
+        "spotify.pause": ([]: any[]) => {
+            Spotify.Pause();
+            return;
+        },
+        "spotify.skipNext": ([]: any[]) => {
+            Spotify.SkipNext();
+            return;
+        },
+        "spotify.skipPrevious": ([]: any[]) => {
+            Spotify.SkipPrevious();
             return;
         }
     };
@@ -1273,6 +1320,16 @@ class ConnectionHandler {
             };
             saveDb();
         }).bind(this));
+        this.exprs.get("/SetSpotifyToken", (async function(this: ConnectionHandler, req: Request, res: Response) {
+            const cookies: any = getCookies(req);
+            if (cookies.sessionid == undefined) { res.redirect("/login"); return; }
+            if (sessionIdToUserName[cookies.sessionid] == undefined) { res.redirect("/login"); return; }
+
+            const query: { [key: string]: (string|string[]|undefined) } = req.query as { [key: string]: (string|string[]|undefined) };
+            if (!query.error) Spotify.GetToken(query.code! as string);
+            else console.log("Getting token failed:", query.state);
+            res.redirect("/index");
+        }).bind(this));
         this.exprs.get("/", (req: Request, res: Response) => { res.redirect("/index"); });
     }
 
@@ -1571,7 +1628,7 @@ class ConnectionHandler {
                             delete this.deviceNameToIndex[name];
                             delete this.deviceWsConnectionKey[i];
                             delete this.deviceHttpConnectionIds[i];
-                            console.log(name, "hasnt pinged in " + (((new Date()).getTime() - this.deviceHttpLastPingTime[id]!) / 1000) + "s.");
+                            // console.log(name, "hasnt pinged in " + (((new Date()).getTime() - this.deviceHttpLastPingTime[id]!) / 1000) + "s.");
                             delete this.deviceHttpLastPingTime[id];
                             delete this.httpCmdQueue[id];
                             const returnResolveList: ((val: any)=> void)[] = this.httpReturnResolveLists[id];
@@ -1603,7 +1660,8 @@ class ConnectionHandler {
                 console.log("Wss server on wss://mocs.campbellsimpson.com/ws.");
                 console.log("Https server on https://mocs.campbellsimpson.com.");
                 console.log("ws server on ws://localhost:8080/ws.");
-                console.log("Http server on http://localhost:8080.");
+                console.log("Http server on http://localhost:8080.\n");
+                console.log("Spotify authorize link:", Spotify.authorizeLink);
             });
         });
     }

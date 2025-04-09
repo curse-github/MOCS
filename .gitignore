@@ -1,4 +1,9 @@
 /.vscode
 /node_modules
 database.json
-private-key.txt
+webpush-public-key.txt
+webpush-private-key.txt
+spotify-secret.txt
+spotify-id.txt
+spotify-access-token.txt
+spotify-refresh-token.txt

@@ -46,6 +46,7 @@ void wifiInitConnection(const char* ssid, const char* password) {
 // code adapted from https://www.renesas.com/en/products/gadget-renesas/reference/gr-rose/library-wifiesp
 WiFiClient client;
 bool startedRecieving = false;
+unsigned int timeConnected = 0;
 bool lastwasAvaliable = false;
 bool finishedRecieving = true;
 std::string data = "";
@@ -55,9 +56,9 @@ void clearVars() {
   finishedRecieving = true;
   data = "";
 }
-bool startPostRequest(const char *host, const int &port, const char *path, const std::string &postData) {
-  if (!wifiClientStatus()) return false;
-  if (!finishedRecieving) return false;
+unsigned char startPostRequest(const char *host, const int &port, const char *path, const std::string &postData) {
+  if (!wifiClientStatus()) return 0;
+  if (!finishedRecieving) return 1;
 #if _WIFI_DEBUG
   myPrintln();
   //myPrintln("Starting connection to server...");
@@ -72,6 +73,7 @@ bool startPostRequest(const char *host, const int &port, const char *path, const
     myPrint(path);
     myPrintln('"');
 #endif
+    timeConnected = millis();
     // Make a HTTP request
     client.print("POST ");
     client.print(path);
@@ -93,19 +95,28 @@ bool startPostRequest(const char *host, const int &port, const char *path, const
     lastwasAvaliable = false;
     finishedRecieving = false;
     data = "";
-    return true;
+    return 2;
   } else {
 #if _WIFI_DEBUG
     myPrint("Failed to connect to \"");
     myPrint(host);
     myPrintln("\"");
 #endif
-    return false;
+    return 0;
   }
 }
 std::string continuePostRequest() {
   if (!wifiClientStatus()) return "";
   if (finishedRecieving) return "";
+  if ((millis()-timeConnected) > 3000) {
+    // connection has timed out
+    startedRecieving = false;
+    lastwasAvaliable = false;
+    finishedRecieving = true;
+    data = "";
+    client.stop();
+    return "-";
+  }
   if (!startedRecieving) {
     if (!client.available()) return "";
 /*#if _WIFI_DEBUG

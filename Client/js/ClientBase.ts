@@ -99,7 +99,9 @@ export class ClientBase {
         // get return value of each call and
         const returnVals: any[] = commands.map(
             ({ func, overload, parameters }: { func: string, overload: number, parameters: any[] }): any => {
-                return this.funcNameToCallback[func][overload](...parameters);
+                if (this.funcNameToCallback[func])
+                    if (this.funcNameToCallback[func][overload])
+                        return this.funcNameToCallback[func][overload](...parameters);
             }
         );
         this.returnValue(returnId, returnVals);

@@ -27,7 +27,7 @@ bool isMocsActive = false;
 const char *ip = "192.168.0.105";
 const char *ssid = "CurseNet24";
 const char *password = "simpsoncentral";
-const char *self = "{\"name\":\"ESP8266\",\"functions\":[{\"name\":\"toggle\",\"overloads\":[{\"visible\":false,\"parameters\":[],\"returnType\":\"none\"}]}],\"values\":[{\"name\":\"fan\",\"type\":\"bool\",\"value\":true,\"readonly\":false},{\"name\":\"ir\",\"type\":\"integer\",\"value\":0,\"readonly\":true,\"displayType\":\"hex\"}],\"children\":[]}";
+const char *self = "{\"name\":\"ESP8266\",\"functions\":[{\"name\":\"Toggle\",\"overloads\":[{\"visible\":false,\"parameters\":[],\"returnType\":\"none\"}]}],\"values\":[{\"name\":\"Fan\",\"type\":\"bool\",\"value\":true,\"readonly\":false},{\"name\":\"IR\",\"type\":\"integer\",\"value\":0,\"readonly\":true,\"displayType\":\"hex\"}],\"children\":[]}";
 std::string connectionId = "";
 unsigned long lastKeepAliveTime = 0;
 WaitingOnEnum waitingOn = WaitingOnEnum::None;
@@ -40,11 +40,11 @@ void setup() {
   outputInit();
 }
 void handleCmd(const std::string &cmd) {
-  if (cmd.substr(0,8) == "fan.set(")
+  if (cmd.substr(0,8) == "Fan.set(")
     setState(cmd[8] == 't');
-  else if (cmd.substr(0,7) == "toggle(") {
+  else if (cmd.substr(0,7) == "Toggle(") {
     bool newState = toggle();
-    updateQueue.push_back({ "fan",0,newState });
+    updateQueue.push_back({ "Fan",0,newState });
   }
 }
 std::string workingStr = "";
@@ -54,15 +54,17 @@ void executeUpdateValue(const updateValueStr &str) {
   workingStr += "\",\"name\":\"";
   workingStr += str.name;
   workingStr += "\",\"value\":";
-  if (str.name[0]=='f') {
+  if (str.name[0]=='F') {
     workingStr += (str.valueBool?"true":"false");
-  } else if (str.name[0]=='i') {
+  } else if (str.name[0]=='I') {
     workingStr += std::to_string(str.valueNum);
   } else return;
   workingStr += '}';
   waitingOn = WaitingOnEnum::Generic;
-  if (!startPostRequest(ip, 8080, "/updateValue", workingStr))
+  if (startPostRequest(ip, 8080, "/updateValue", workingStr) == 0) {
+    myPrintln("broke at updateValue.");
     mocsConnectionClosed();
+  }
   workingStr = "";
 }
 void mocsConnectionClosed() {
@@ -119,8 +121,10 @@ void mocsLoop() {
           workingStr += "]}";
           // do post request
           waitingOn = WaitingOnEnum::Generic;
-          if (!startPostRequest(ip, 8080, "/return", workingStr))
+          if (startPostRequest(ip, 8080, "/return", workingStr) == 0) {
+            myPrintln("broke at return.");
             mocsConnectionClosed();
+          }
           workingStr = "";
           break;
         case WaitingOnEnum::Generic:
@@ -138,8 +142,10 @@ void mocsLoop() {
     if (!isMocsActive && ((millis() - lastKeepAliveTime) >= 10000) ) {
       lastKeepAliveTime = millis();
       waitingOn = WaitingOnEnum::Key;
-      if(!startPostRequest(ip,8080,"/connect", self))
+      if(startPostRequest(ip,8080,"/connect", self) == 0) {
+        myPrintln("broke at connect.");
         mocsConnectionClosed();
+      }
     }
     if (!isMocsActive) return;
     // connected to mocs
@@ -149,8 +155,10 @@ void mocsLoop() {
       workingStr += connectionId;
       workingStr += "\"}";
       waitingOn = WaitingOnEnum::Cmd;
-      if (!startPostRequest(ip,8080,"/keepAlive", workingStr))
+      if (startPostRequest(ip,8080,"/keepAlive", workingStr) == 0) {
+        myPrintln("broke at keepAlive.");
         mocsConnectionClosed();
+      }
       workingStr = "";
     } else if (updateQueue.size() > 0) {
       // do commands from the queue
@@ -170,28 +178,28 @@ void loop() {
 }
 void onButton(const int &code) {
   if (code==0) return;
-  updateQueue.push_back({ "ir",static_cast<unsigned int>(code),false });
+  updateQueue.push_back({ "IR",static_cast<unsigned int>(code),false });
   const char button = encode(code);
   if (button == 'E') return;
   bool newState = false;
   switch(button) {
     case 'p':// Power
       newState = toggle();
-      updateQueue.push_back({ "fan",0,newState });
+      updateQueue.push_back({ "Fan",0,newState });
       break;
     case '^':// Up
       setState(true);
-      updateQueue.push_back({ "fan",0,true });
+      updateQueue.push_back({ "Fan",0,true });
       break;
     case 'v':// Down
     case 'f':// FUNC/STOP
     case 's':// ST/REPT
       setState(false);
-      updateQueue.push_back({ "fan",0,false });
+      updateQueue.push_back({ "Fan",0,false });
       break;
     case 't':// toggle or play/pause
       newState = toggle();
-      updateQueue.push_back({ "fan",0,newState });
+      updateQueue.push_back({ "Fan",0,newState });
       break;
     case '>':
       break;

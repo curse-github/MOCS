@@ -2,12 +2,12 @@
   "name": "mocs3",
   "version": "0.0.1",
   "description": "Modular Online Control System",
-  "main": "Server.jsx",
+  "main": "Server.js",
   "scripts": {
-    "start": "node ./Server.jsx",
-    "startClientWs": "node ./Client/js/wsClient.jsx",
-    "startClientHttpJson": "node ./Client/js/httpJsonClient.jsx",
-    "startClientHttpText": "node ./Client/js/httpTextClient.jsx"
+    "start": "node ./Server.js",
+    "startClientWs": "node ./Client/js/wsClient.js",
+    "startClientHttpJson": "node ./Client/js/httpJsonClient.js",
+    "startClientHttpText": "node ./Client/js/httpTextClient.js"
   },
   "author": "Curse",
   "license": "MIT",

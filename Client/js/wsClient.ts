@@ -90,35 +90,35 @@ class WsClient extends ClientBase {
 }
 const name: string = "WsDevice";
 const client: WsClient = new WsClient(name);
-client.addFunction("func1")!
+client.addFunction("Func1")!
     .addOverload(true, "none", () => {
-        console.log("func1()");
+        console.log("Func1()");
     });
-client.addFunction("func2")!
+client.addFunction("Func2")!
     .addOverload(true, "none", (str: string) => {
-        console.log("func2(\"" + str + "\")");
+        console.log("Func2(\"" + str + "\")");
     })
     .addStringParameter("start");
-client.addFunction("func3")!
+client.addFunction("Func3")!
     .addOverload(true, "none", (float1: number, float2: number) => {
-        console.log("func3(" + float1 + ", " + float2 + ")");
+        console.log("Func3(" + float1 + ", " + float2 + ")");
     })
     .addNumberParameter("float", 0.5, "normal", [ 0, 1 ])
     .addNumberParameter("float", 0.5, "slider", [ 0, 1 ]);
-client.addFunction("func4")!
+client.addFunction("Func4")!
     .addOverload(true, "none", (int1: number, int2: number) => {
-        console.log("func4(" + int1 + ", " + int2 + ")");
+        console.log("Func4(" + int1 + ", " + int2 + ")");
     })
     .addNumberParameter("integer", 1, "normal", [ 0, 5 ])
     .addNumberParameter("integer", 1, "slider", [ 0, 5 ]);
-client.addFunction("func5")!
+client.addFunction("Func5")!
     .addOverload(true, "none", (bool: boolean) => {
-        console.log("func5(" + (bool ? "true" : "false") + ")");
+        console.log("Func5(" + (bool ? "true" : "false") + ")");
     })
     .addBoolParameter(false);
-client.addFunction("func6")!
+client.addFunction("Func6")!
     .addOverload(true, "none", (int: number) => {
-        console.log("func6(" + int + ")");
+        console.log("Func6(" + int + ")");
     })
     .addColorParameter("#FF00FF");
 client.addStringValue("val1", "start", false, (value: string) => {
